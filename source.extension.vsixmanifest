@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb" Version="2023.2" Language="en-US" Publisher="Lokesh Govindu" />
+        <Identity Id="DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb" Version="2023.2.0.2" Language="en-US" Publisher="Lokesh Govindu" />
         <DisplayName>DependencyGraph</DisplayName>
         <Description xml:space="preserve">Dispaly visual studio projects dependency graph.</Description>
         <Icon>Resources\Icon.png</Icon>

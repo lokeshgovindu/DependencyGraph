@@ -97,7 +97,11 @@ namespace DependencyGraph.UI
                     if (cl == 0) nc.node.BackColor = Colors.DarkOliveGreen;
                     nc.node.Position = new Point(cx, top + nh * i++);
                 }
-                ln = rol.Max(sr => sr.Item.Name.Length);
+                ln = rol.Max(sr =>
+                {
+                    Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
+                    return sr.Item.Name.Length;
+                });
                 rol = prt.AllOnLevel(++cl);
             }
         }
@@ -195,6 +199,7 @@ namespace DependencyGraph.UI
 
         public void RequestShow(ProjectReferenceTree r)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             SHOW_PROJECT_REQUEST?.Invoke(r.Item.Name);
         }
 
@@ -223,6 +228,7 @@ namespace DependencyGraph.UI
 
         private CustomNodeViewModel CreateNode(ProjectReferenceTree r)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             var n = new CustomNodeViewModel();
             n.nodes = this;
             n.Name = r.Item.Name;

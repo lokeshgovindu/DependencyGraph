@@ -1,18 +1,12 @@
-﻿using EnvDTE;
-using Microsoft.VisualStudio.Package;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Input;
-using System.Xml.Linq;
-using VSLangProj;
-using DependencyGraph.Scan;
+﻿using DependencyGraph.Scan;
 using DependencyGraph.UI;
+using EnvDTE;
 using EnvDTE80;
-using Project = EnvDTE.Project;
-using DependencyGraph.Properties;
+using System.Collections.Generic;
+using System.Runtime.InteropServices;
+using System.Windows;
+using System.Windows.Forms;
+using System.Windows.Input;
 
 namespace DependencyGraph
 {
@@ -29,14 +23,20 @@ namespace DependencyGraph
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             InitializeComponent();
+
+            // To avoid showing in Alt+Tab
+            this.Owner = System.Windows.Application.Current.MainWindow;
+
             SetupContols();
-            WindowState = WindowState.Maximized;
             _dte = dte;
             _vsScanner = new VSScanner(_dte);
             foreach (var project in _vsScanner.Projects)
             {
                 CBProjectNames.Items.Add(project.Name);
             }
+            
+            this.SourceInitialized += (x, y) => { this.HideMinimizeAndMaximizeButtons(); };
+
             Display();
         }
 
@@ -73,7 +73,18 @@ namespace DependencyGraph
 
             PreviewKeyUp += (s, e) =>
             {
+                if (Keyboard.IsKeyDown(Key.LeftAlt) || Keyboard.IsKeyDown(Key.RightAlt))
+                {
+                    if (e.Key == Key.F4)
+                    {
+                        System.Windows.MessageBox.Show("Sorry you cannot close this form via ALT+F4");
+                        Close();
+                        e.Handled = true;
+                    }
+                }
+
                 if (!_ns) return;
+
                 if (Keyboard.IsKeyDown(Key.LeftCtrl) || Keyboard.IsKeyDown(Key.RightCtrl))
                 {
                     if (e.Key == Key.S)
@@ -81,15 +92,9 @@ namespace DependencyGraph
                 }
             };
 
-            //ShowAllReferences.Click += (s, e) =>
-            //{
-            //    alternate(ShowAllReferences,
-            //        ShowAllReferences,
-            //        ShowDeepestReferencesOnly);
-            //    if ((string)ShowAllReferences.Content == ShowAllReferences)
-            //        _ns.DisplayMethod = ConnectionsVisibility.Deepest;
-            //    else _ns.DisplayMethod = ConnectionsVisibility.All;
-            //};
+            //this.Closing += (s, e) => { e.Cancel = true; };
+
+            Btn_SaveAs.Click += Btn_SaveAs_Click;
 
             CBDisplayMethod.SelectionChanged += (s, e) =>
             {
@@ -118,6 +123,21 @@ namespace DependencyGraph
                     SelectionChangedHandler(projectName, displayMethod);
                 }
             };
+        }
+
+        private void Btn_SaveAs_Click(object sender, RoutedEventArgs e)
+        {
+            SaveFileDialog saveFileDialog = new SaveFileDialog
+            {
+                InitialDirectory = null,
+                FileName = CBProjectNames.SelectedItem.ToString() + ".png",
+                Filter = "PNG image file (*.png)|*.png"
+            };
+
+            if (saveFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            {
+                ImageSaver.SaveAsPNG(_ns.View, saveFileDialog.FileName);
+            }
         }
 
         private void SelectionChangedHandler(string projectName, ConnectionsVisibility displayMethod)
@@ -150,13 +170,35 @@ namespace DependencyGraph
         }
 
         #region Helper methods
-        public static T alternate<T>(T e, string s1, string s2) where T : FrameworkElement
-        {
-            if (e is Label l) l.Content = (string)l.Content == s1 ? s2 : s1;
-            else if (e is Button b) b.Content = (string)b.Content == s1 ? s2 : s1;
-            return e;
-        }
+        //public static T alternate<T>(T e, string s1, string s2) where T : FrameworkElement
+        //{
+        //    if (e is Label l) l.Content = (string)l.Content == s1 ? s2 : s1;
+        //    else if (e is Button b) b.Content = (string)b.Content == s1 ? s2 : s1;
+        //    return e;
+        //}
         #endregion
 
+    }
+
+    internal static class WindowExtensions
+    {
+        // from winuser.h
+        private const int GWL_STYLE = -16,
+                          WS_MAXIMIZEBOX = 0x10000,
+                          WS_MINIMIZEBOX = 0x20000;
+
+        [DllImport("user32.dll")]
+        extern private static int GetWindowLong(IntPtr hwnd, int index);
+
+        [DllImport("user32.dll")]
+        extern private static int SetWindowLong(IntPtr hwnd, int index, int value);
+
+        internal static void HideMinimizeAndMaximizeButtons(this System.Windows.Window window)
+        {
+            IntPtr hwnd = new System.Windows.Interop.WindowInteropHelper(window).Handle;
+            var currentStyle = GetWindowLong(hwnd, GWL_STYLE);
+
+            SetWindowLong(hwnd, GWL_STYLE, (currentStyle & ~WS_MINIMIZEBOX));
+        }
     }
 }

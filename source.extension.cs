@@ -11,7 +11,7 @@ namespace DependencyGraph
         public const string Name = "DependencyGraph";
         public const string Description = @"Dispaly visual studio projects dependency graph.";
         public const string Language = "en-US";
-        public const string Version = "2023.2";
+        public const string Version = "2023.2.0.2";
         public const string Author = "Lokesh Govindu";
         public const string Tags = "";
     }

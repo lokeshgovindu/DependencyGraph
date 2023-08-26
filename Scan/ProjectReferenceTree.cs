@@ -38,7 +38,6 @@ namespace DependencyGraph.Scan
         }
         public static ProjectReferenceTree GetProjectReferencesOnly(Project project)
         {
-            Console.Out.WriteLine("[GetProjectReferencesOnly] item.Name = {0}", project.Name);
             var ret = new ProjectReferenceTree();
             ret.Item = project;
             ret.DepthLevel = 0;
@@ -49,11 +48,13 @@ namespace DependencyGraph.Scan
             foreach (var projRef in references)
             {
                 ret.Proj2ProjRefTreeMap.Add(projRef, ret);
-                var projRefPRT = new ProjectReferenceTree();
-                projRefPRT.Item = projRef;
-                projRefPRT.DepthLevel = 1;
-                projRefPRT.Proj2ProjRefTreeMap = ret.Proj2ProjRefTreeMap;
-                projRefPRT.AllPRTs = ret.AllPRTs;
+                var projRefPRT = new ProjectReferenceTree
+                {
+                    Item = projRef,
+                    DepthLevel = 1,
+                    Proj2ProjRefTreeMap = ret.Proj2ProjRefTreeMap,
+                    AllPRTs = ret.AllPRTs
+                };
                 projRefPRT.AllPRTs.Add(projRefPRT);
                 ret.references.Add(projRefPRT);
             }
@@ -63,7 +64,6 @@ namespace DependencyGraph.Scan
         private ProjectReferenceTree() { }
         public ProjectReferenceTree(Project project, ProjectReferenceTree projectReferenceTree = null, int depthLevel = 0)
         {
-            Console.Out.WriteLine("[ProjectReferenceTree] item.Name = {0}, depth = {1}", project.Name, depthLevel);
             this.Item = project;
             this.DepthLevel = depthLevel;
             if (projectReferenceTree == null)
@@ -77,9 +77,6 @@ namespace DependencyGraph.Scan
                 this.AllPRTs = projectReferenceTree.AllPRTs;
             }
             AllPRTs.Add(this);
-            var references = project.ProjectReferences();
-            foreach (var projRef in references)
-                Console.Out.WriteLine("[ProjectReferenceTree] - projRef.Name = {0}", projRef.Name);
             AddProjects(project.ProjectReferences());
         }
 
@@ -87,15 +84,11 @@ namespace DependencyGraph.Scan
         {
             if (Proj2ProjRefTreeMap.ContainsKey(item))
             {
-                Console.Out.WriteLine("[AddProject] *** ProjToProjRefTreeMap contains {0} ***", item.Name);
-
                 // Parent of refTree containing the item
                 var parentRefTree = Proj2ProjRefTreeMap[item];
-                Console.Out.WriteLine("[AddProject] *** parentRefTree.item.Name = {0}", parentRefTree.Item.Name);
 
                 // RefTree containing the item
                 ProjectReferenceTree refTree = parentRefTree.GetPRTFromReferences(item);
-                Console.Out.WriteLine("[AddProject] *** refTree.item.Name = {0}", refTree.Item.Name);
 
                 Debug.Assert(refTree != null, "Value suppose to contain item");
                 References.Add(refTree);
@@ -130,6 +123,7 @@ namespace DependencyGraph.Scan
 
         public void Print(string depth = "")
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             Console.Out.WriteLine("{0}{1}", depth, Item.Name);
             foreach (var subRefTree in this.References)
             {

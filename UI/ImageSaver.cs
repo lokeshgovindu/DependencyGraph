@@ -26,6 +26,12 @@ namespace DependencyGraph.UI
             AsPNG(v, fs);
             fs.Close();
         }
+        public static void SaveAsPNG(FrameworkElement element, string fileName)
+        {
+            var fs = File.Open(fileName, FileMode.Create);
+            AsPNG(element, fs);
+            fs.Close();
+        }
 
         /// <summary>Saves given element as png image into given stream.</summary>
         /// <param name="v">Element to be saved.</param>

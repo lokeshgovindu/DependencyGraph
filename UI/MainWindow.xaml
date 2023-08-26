@@ -6,15 +6,18 @@
         xmlns:local="clr-namespace:DependencyGraph"
         xmlns:nodenetwork="clr-namespace:NodeNetwork.Views;assembly=NodeNetwork"
         mc:Ignorable="d"
-        Title="MainWindow" Height="450" Width="800">
-    <Grid x:Name="mainGrid" Margin="1,1,1,1">
+        ShowInTaskbar="False"
+        IsManipulationEnabled="False"
+        WindowStartupLocation="CenterOwner"
+        Title="MainWindow" Width="1024" Height="768">
+    <Grid x:Name="mainGrid">
         <ComboBox
             x:Name="CBProjectNames"
             VerticalContentAlignment="Center"
             HorizontalAlignment="Left" VerticalAlignment="Top"
             Width="210" Margin="5,5,5,5" Height="22">
         </ComboBox>
-        
+
         <ComboBox
             x:Name="CBDisplayMethod"
             VerticalContentAlignment="Center"
@@ -22,10 +25,10 @@
             Width="210" Margin="5,5,5,5" Height="22">
         </ComboBox>
 
-        <!--<Button x:Name="ShowAllReferences"
+        <Button x:Name="Btn_SaveAs"
                 VerticalContentAlignment="Center"
-				VerticalAlignment="Top"
+				VerticalAlignment="Bottom"
 				HorizontalAlignment="Right"
-                Margin="5,5,5,5" Height="22">Show All References</Button>-->
+                Margin="5,5,5,5" Height="22">Save As</Button>
     </Grid>
 </Window>

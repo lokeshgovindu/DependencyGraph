@@ -15,7 +15,7 @@ namespace DependencyGraph
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             DTE2 dte = DependencyGraphPackage.GetDTE();
             MainWindow mainWindow = new MainWindow(dte);
-            mainWindow.Show();
+            mainWindow.ShowDialog();
         }
     }
 }
