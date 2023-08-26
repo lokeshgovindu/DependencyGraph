@@ -1,5 +1,5 @@
 # DependencyGraph
-![1-ShowDeepestReferencesOnly](./Screenshots/1-ShowDeepestReferencesOnly.png)
+![1-ShowDeepestReferencesOnly](https://github.com/lokeshgovindu/DependencyGraph/blob/master/Screenshots/1-ShowDeepestReferencesOnly.png)
 
 ![2-ShowAllReferences](./Screenshots/2-ShowAllReferences.png)
 
