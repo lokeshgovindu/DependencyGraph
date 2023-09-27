@@ -11,6 +11,9 @@
       <Group guid="DependencyGraph" id="MyMenuGroup" priority="0x0600">
         <Parent guid="VSMainMenu" id="Tools"/>
       </Group>
+      <Group guid="DependencyGraph" id="MyMenuGroup" priority="0x0600">
+        <Parent guid="guidSHLMainMenu" id="IDM_VS_CTXT_PROJNODE"/>
+      </Group>
     </Groups>
 
     <!--This section defines the elements the user can interact with, like a menu command or a button

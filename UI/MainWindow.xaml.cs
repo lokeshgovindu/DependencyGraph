@@ -43,9 +43,20 @@ namespace DependencyGraph
         public void Display()
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            CBProjectNames.SelectedItem = _vsScanner.StartupProject.Name;
-            //var activeProject = _dte.ActiveSolutionProjects as Project;
-            //CBProjectNames.SelectedItem = activeProject.Name;
+            var activeProjects = _dte.ActiveSolutionProjects as Array;
+            if (activeProjects != null && activeProjects.Length > 0)
+            {
+                // Assuming there is only one active project
+                EnvDTE.Project activeProject = activeProjects.GetValue(0) as EnvDTE.Project;
+                if (activeProject != null)
+                {
+                    CBProjectNames.SelectedItem = activeProject.Name;
+                }
+            }
+            else
+            {
+                CBProjectNames.SelectedItem = _vsScanner.StartupProject.Name;
+            }
         }
 
         private void OnProjectShowRequest(string projectName)
