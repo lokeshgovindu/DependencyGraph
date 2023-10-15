@@ -13,7 +13,7 @@ namespace DependencyGraph.UI
         /// <param name="v">Element to be saved.</param>
         /// <param name="defaultName">Name for saved file. Do not provide extension (.png).</param>
         /// <param name="defaultLocation">Initial location of dialog box.</param>
-        public static void AsPNG(FrameworkElement v, string defaultName = null, string defaultLocation = null)
+        public static bool AsPNG(FrameworkElement v, string defaultName = null, string defaultLocation = null)
         {
             var sd = new SaveFileDialog()
             {
@@ -21,16 +21,19 @@ namespace DependencyGraph.UI
                 InitialDirectory = defaultLocation,
                 Filter = "PNG image file (*.png)|*.png|All files (*.*)|*.*"
             };
-            if (sd.ShowDialog() != DialogResult.OK) return;
+            if (sd.ShowDialog() != DialogResult.OK) return false;
             var fs = File.Open(sd.FileName, FileMode.Create);
             AsPNG(v, fs);
             fs.Close();
+            return true;
         }
-        public static void SaveAsPNG(FrameworkElement element, string fileName)
+
+        public static bool AsPNG(FrameworkElement element, string fileName)
         {
             var fs = File.Open(fileName, FileMode.Create);
             AsPNG(element, fs);
             fs.Close();
+            return true;
         }
 
         /// <summary>Saves given element as png image into given stream.</summary>
@@ -75,7 +78,7 @@ namespace DependencyGraph.UI
             return b;
         }
 
-        /// <summary>Returns current DPI based on givne visual.</summary>
+        /// <summary>Returns current DPI based on given visual.</summary>
         /// <param name="v"></param>
         /// <returns></returns>
         public static (double x, double y) GetDPI(Visual v)

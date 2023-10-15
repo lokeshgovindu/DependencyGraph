@@ -11,24 +11,53 @@
         WindowStartupLocation="CenterOwner"
         Title="MainWindow" Width="1024" Height="768">
     <Grid x:Name="mainGrid">
-        <ComboBox
-            x:Name="CBProjectNames"
-            VerticalContentAlignment="Center"
-            HorizontalAlignment="Left" VerticalAlignment="Top"
-            Width="210" Margin="5,5,5,5" Height="22">
-        </ComboBox>
-
-        <ComboBox
-            x:Name="CBDisplayMethod"
-            VerticalContentAlignment="Center"
-            HorizontalAlignment="Right" VerticalAlignment="Top"
-            Width="210" Margin="5,5,5,5" Height="22">
-        </ComboBox>
-
-        <Button x:Name="Btn_SaveAs"
+        <StackPanel
+            Grid.Row="1"
+            VerticalAlignment="Top"
+            Orientation="Horizontal">
+            <ComboBox
+                x:Name="CBProjectNames"
                 VerticalContentAlignment="Center"
-				VerticalAlignment="Bottom"
-				HorizontalAlignment="Right"
-                Margin="5,5,5,5" Height="22">Save As</Button>
+                Width="210" Height="22">
+            </ComboBox>
+
+            <ComboBox
+                x:Name="CBDisplayMethod"
+                VerticalContentAlignment="Center"
+                Width="210" Height="22" Margin="5,0,0,0">
+            </ComboBox>
+
+            <Button
+                x:Name="Btn_SaveAs"
+                VerticalContentAlignment="Center"
+                Height="22" Margin="5,0,0,0">Save As</Button>
+            
+            <Button
+                x:Name="Btn_SaveSolutionDGML"
+                VerticalContentAlignment="Center"
+                Height="22" Margin="5,0,0,0">Save Solution DependencyGraph</Button>
+        </StackPanel>
+
+        <Grid Grid.Row="3">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <StatusBar
+                x:Name="statusBar"
+                VerticalAlignment="Bottom">
+                <StatusBarItem>
+                    <TextBlock Name="SB_ProjectName" Text=""/>
+                </StatusBarItem>
+                <Separator/>
+                <StatusBarItem>
+                    <TextBlock Name="SB_Nodes" Text=""/>
+                </StatusBarItem>
+                <Separator/>
+                <StatusBarItem>
+                    <TextBlock Name="SB_Connections" Text=""/>
+                </StatusBarItem>
+            </StatusBar>
+        </Grid>
     </Grid>
 </Window>

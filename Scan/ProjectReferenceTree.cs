@@ -14,11 +14,24 @@ namespace DependencyGraph.Scan
     {
         public static Func<ProjectReferenceTree, string> toString;
 
+        public string ProjectName;
+
+        public Project _item;
+
         /// <summary>Item in this node.</summary>
-        public Project Item { get; private set; }
+        public Project Item
+        { 
+            get => _item;
+            private set
+            {
+                ThreadHelper.ThrowIfNotOnUIThread();
+                _item = value;
+                ProjectName = _item.Name;
+            }
+        }
 
         /// <summary>List of sub items for this node.</summary>
-        private HashSet<ProjectReferenceTree> references = new HashSet<ProjectReferenceTree>();
+        private HashSet<ProjectReferenceTree> _references = new HashSet<ProjectReferenceTree>();
 
         /// <summary>Depth level for this node</summary>
         public int DepthLevel { get; private set; } = 0;
@@ -26,23 +39,32 @@ namespace DependencyGraph.Scan
         /// <summary>Arbitrary additional data.</summary>
         public object data;
 
-        public HashSet<ProjectReferenceTree> References { get => references; set => references = value; }
+        public HashSet<ProjectReferenceTree> References { get => _references; set => _references = value; }
 
         /// <summary>Stores parent node that references given node of T.</summary>
         private Dictionary<Project, ProjectReferenceTree> Proj2ProjRefTreeMap;
-        private HashSet<ProjectReferenceTree> AllPRTs;
+
+        public HashSet<ProjectReferenceTree> AllPRTs;
 
         public static ProjectReferenceTree GetProjectReferenceTree(Project project)
         {
             return new ProjectReferenceTree(project);
         }
+
+        public int ReferencesCount      { get; private set; }
+        public int ReferencedByCount    { get; private set; }
+
         public static ProjectReferenceTree GetProjectReferencesOnly(Project project)
         {
-            var ret = new ProjectReferenceTree();
-            ret.Item = project;
-            ret.DepthLevel = 0;
-            ret.Proj2ProjRefTreeMap = new Dictionary<Project, ProjectReferenceTree>();
-            ret.AllPRTs = new HashSet<ProjectReferenceTree>();
+            //Console.Out.WriteLine("[GetProjectReferencesOnly] item.Name = {0}", project.Name);
+            var ret = new ProjectReferenceTree 
+            {
+                Item                = project,
+                DepthLevel          = 0,
+                Proj2ProjRefTreeMap = new Dictionary<Project, ProjectReferenceTree>(),
+                AllPRTs             = new HashSet<ProjectReferenceTree>()
+            };
+
             ret.AllPRTs.Add(ret);
             var references = project.ProjectReferences();
             foreach (var projRef in references)
@@ -50,21 +72,23 @@ namespace DependencyGraph.Scan
                 ret.Proj2ProjRefTreeMap.Add(projRef, ret);
                 var projRefPRT = new ProjectReferenceTree
                 {
-                    Item = projRef,
-                    DepthLevel = 1,
+                    Item                = projRef,
+                    DepthLevel          = 1,
                     Proj2ProjRefTreeMap = ret.Proj2ProjRefTreeMap,
-                    AllPRTs = ret.AllPRTs
+                    AllPRTs             = ret.AllPRTs
                 };
                 projRefPRT.AllPRTs.Add(projRefPRT);
-                ret.references.Add(projRefPRT);
+                ret._references.Add(projRefPRT);
             }
             return ret;
         }
 
         private ProjectReferenceTree() { }
+
         public ProjectReferenceTree(Project project, ProjectReferenceTree projectReferenceTree = null, int depthLevel = 0)
         {
-            this.Item = project;
+            //Console.Out.WriteLine("[ProjectReferenceTree] item.Name = {0}, depth = {1}", project.Name, depthLevel);
+            this.Item       = project;
             this.DepthLevel = depthLevel;
             if (projectReferenceTree == null)
             {
@@ -75,9 +99,15 @@ namespace DependencyGraph.Scan
             {
                 this.Proj2ProjRefTreeMap = projectReferenceTree.Proj2ProjRefTreeMap;
                 this.AllPRTs = projectReferenceTree.AllPRTs;
+                this.ReferencedByCount += 1;
             }
             AllPRTs.Add(this);
-            AddProjects(project.ProjectReferences());
+            var references = project.ProjectReferences();
+            this.ReferencesCount = references.Count;
+            foreach (var refProj in references)
+            {
+                AddProject(refProj);
+            }
         }
 
         public void AddProject(Project item)
@@ -89,19 +119,21 @@ namespace DependencyGraph.Scan
 
                 // RefTree containing the item
                 ProjectReferenceTree refTree = parentRefTree.GetPRTFromReferences(item);
+                refTree.ReferencedByCount += 1;
 
                 Debug.Assert(refTree != null, "Value suppose to contain item");
                 References.Add(refTree);
 
                 // Do steal parent if it is deeper in tree.
                 if (parentRefTree.DepthLevel > DepthLevel) return;
+
                 refTree.SetLevel(DepthLevel + 1);
                 Proj2ProjRefTreeMap[item] = this;
                 return;
             }
 
             Proj2ProjRefTreeMap.Add(item, this);
-            references.Add(new ProjectReferenceTree(item, this, DepthLevel + 1));
+            _references.Add(new ProjectReferenceTree(item, this, DepthLevel + 1));
         }
 
         private void AddProjects(IEnumerable<Project> projects)
@@ -121,14 +153,40 @@ namespace DependencyGraph.Scan
             }
         }
 
-        public void Print(string depth = "")
+        public void PrintReferenceTree(string depth = "")
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             Console.Out.WriteLine("{0}{1}", depth, Item.Name);
             foreach (var subRefTree in this.References)
             {
-                subRefTree.Print(depth + "----");
+                subRefTree.PrintReferenceTree(depth + "----");
             }
+        }
+
+        public void PrintReferenceMap(string depth = "")
+        {
+            foreach (var parent in this.AllPRTs)
+            {
+                Console.WriteLine("{0}", parent.ProjectName);
+                foreach (var child in parent.References)
+                {
+                    Console.WriteLine("  -- {0}", child.ProjectName);
+                }
+            }
+        }
+
+        public void PrintGraphVizDot()
+        {
+            Console.WriteLine("digraph {");
+            foreach (var parent in this.AllPRTs)
+            {
+                //Console.WriteLine("    {0} -- ", parent.Item.Name);
+                foreach (var child in parent.References)
+                {
+                    Console.WriteLine("    {0} -> {1}", parent.ProjectName, child.ProjectName);
+                }
+            }
+            Console.WriteLine("}");
         }
 
         #region Utils

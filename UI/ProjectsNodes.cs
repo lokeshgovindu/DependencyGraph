@@ -39,21 +39,21 @@ namespace DependencyGraph.UI
         public NetworkView View { get; }
 
 
-        private ConnectionsVisibility _dispMeth = ConnectionsVisibility.Deepest;
+        private ConnectionsVisibility _displayMethod = ConnectionsVisibility.Deepest;
 
         public ConnectionsVisibility DisplayMethod
         {
-            get => _dispMeth;
+            get => _displayMethod;
             set
             {
-                _dispMeth = value;
+                _displayMethod = value;
                 ShowConnections();
             }
         }
 
         private ProjectReferenceTree _prt;
-        /// <summary>Projects reference tree to be displayed.</summary>
 
+        /// <summary>Projects reference tree to be displayed.</summary>
         public ProjectReferenceTree PRT
         {
             get => _prt;
@@ -63,11 +63,12 @@ namespace DependencyGraph.UI
                 _prt = value;
                 DisplayTree(_prt);
                 ShowConnections();
+                _nodesCount = _nodes.Count;
             }
         }
 
-        private NetworkViewModel _networkViewModel;
-        public NetworkViewModel NVM => _networkViewModel;
+        private NetworkViewModel    _networkViewModel;
+        public NetworkViewModel     NVM => _networkViewModel;
 
         public ProjectsNodesView(double w = 800, double h = 600)
         {
@@ -77,7 +78,11 @@ namespace DependencyGraph.UI
             SetDisplayMethods();
         }
 
-        private readonly Dictionary<ProjectReferenceTree, RefContext> nodes = new Dictionary<ProjectReferenceTree, RefContext>();
+        private readonly Dictionary<ProjectReferenceTree, RefContext> _nodes = new Dictionary<ProjectReferenceTree, RefContext>();
+        private int _nodesCount         = 0;
+        public  int  NodesCount         => _nodesCount;
+        private int _connectionsCount   = 0;
+        public  int  ConnectionsCount   => _connectionsCount;
 
         private void DisplayTree(ProjectReferenceTree prt)
         {
@@ -97,11 +102,7 @@ namespace DependencyGraph.UI
                     if (cl == 0) nc.node.BackColor = Colors.DarkOliveGreen;
                     nc.node.Position = new Point(cx, top + nh * i++);
                 }
-                ln = rol.Max(sr =>
-                {
-                    Microsoft.VisualStudio.Shell.ThreadHelper.ThrowIfNotOnUIThread();
-                    return sr.Item.Name.Length;
-                });
+                ln = rol.Max(sr => sr.ProjectName.Length);
                 rol = prt.AllOnLevel(++cl);
             }
         }
@@ -112,6 +113,7 @@ namespace DependencyGraph.UI
         {
             _networkViewModel.Connections.Clear();
             displayMethods[DisplayMethod]();
+            _connectionsCount = _networkViewModel.Connections.Count;
         }
 
         private Dictionary<ConnectionsVisibility, Action> displayMethods;
@@ -119,26 +121,26 @@ namespace DependencyGraph.UI
         {
             displayMethods = new Dictionary<ConnectionsVisibility, Action>() {
                 { ConnectionsVisibility.Deepest, ShowDeepestConnections },
-                { ConnectionsVisibility.All, ShowAllConnections },
+                { ConnectionsVisibility.All,     ShowAllConnections     },
                 { ConnectionsVisibility.Project, ShowDeepestConnections },
-                { ConnectionsVisibility.Custom, ShowCustomConnections },
+                { ConnectionsVisibility.Custom,  ShowCustomConnections  },
             };
         }
 
         private void ShowDeepestConnections()
         {
-            foreach (var nc in nodes.Values)
+            foreach (var nc in _nodes.Values)
             {
                 var rn = nc.PRT.GetDeepestReference(); // referenced node;
-                if (rn) Connect(nodes[rn].node, nc.node);
+                if (rn) Connect(_nodes[rn].node, nc.node);
             }
         }
 
         private void ShowAllConnections()
         {
-            foreach (var nc in nodes.Values)
+            foreach (var nc in _nodes.Values)
                 foreach (var r in nc.PRT.References)
-                    Connect(nc.node, nodes[r].node);
+                    Connect(nc.node, _nodes[r].node);
         }
 
         private void ShowCustomConnections()
@@ -167,87 +169,86 @@ namespace DependencyGraph.UI
                     n.Inputs[0], tn.Outputs[0]);
             _networkViewModel.Connections.Add(c);
         }
+
         #endregion
 
         #region Highlighting
         public void ResetHighlights()
         {
-            foreach (var n in nodes.Values)
+            foreach (var n in _nodes.Values)
             {
                 if (n.PRT.DepthLevel == 0) n.node.BackColor = Colors.DarkOliveGreen;
                 else n.node.BackColor = Colors.RoyalBlue;
             }
         }
 
-        public void HighlightReferencingNodes(ProjectReferenceTree r)
+        public void HighlightReferencingNodes(ProjectReferenceTree prt)
         {
             ResetHighlights();
-            r.WithEach(i =>
+            prt.WithEach(i =>
             {
-                if (i.References.Contains(r))
-                    nodes[i].node.BackColor = Colors.LightBlue;
+                if (i.References.Contains(prt))
+                    _nodes[i].node.BackColor = Colors.LightBlue;
             });
         }
 
-        public void HighlightReferencedNodes(ProjectReferenceTree r)
+        public void HighlightReferencedNodes(ProjectReferenceTree prt)
         {
             ResetHighlights();
-            foreach (var sr in r.References)
-                nodes[sr].node.BackColor = Colors.Orange;
+            foreach (var sr in prt.References)
+                _nodes[sr].node.BackColor = Colors.Orange;
         }
         #endregion
 
-        public void RequestShow(ProjectReferenceTree r)
+        public void RequestShow(ProjectReferenceTree prt)
         {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            SHOW_PROJECT_REQUEST?.Invoke(r.Item.Name);
+            SHOW_PROJECT_REQUEST?.Invoke(prt.ProjectName);
         }
 
         /// <summary>Returns new context only when node was not already created, othwerwise null.</summary>
         /// <param name="r"></param>
         /// <returns></returns>
-        public RefContext CreateRefContext(ProjectReferenceTree r)
+        public RefContext CreateRefContext(ProjectReferenceTree prt)
         {
-            if (nodes.ContainsKey(r)) return null;
-            return GetRefContext(r);
+            if (_nodes.ContainsKey(prt)) return null;
+            return GetRefContext(prt);
         }
 
-        private RefContext GetRefContext(ProjectReferenceTree r)
+        private RefContext GetRefContext(ProjectReferenceTree prt)
         {
-            if (nodes.ContainsKey(r)) return nodes[r];
+            if (_nodes.ContainsKey(prt)) return _nodes[prt];
             var nc = new RefContext()
             {
-                node = CreateNode(r),
-                PRT = r,
+                node = CreateNode(prt),
+                PRT = prt,
             };
             nc.node.context = nc;
-            r.data = nc;
-            nodes.Add(r, nc);
+            prt.data = nc;
+            _nodes.Add(prt, nc);
             return nc;
         }
 
-        private CustomNodeViewModel CreateNode(ProjectReferenceTree r)
+        private CustomNodeViewModel CreateNode(ProjectReferenceTree prt)
         {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            var n = new CustomNodeViewModel();
-            n.nodes = this;
-            n.Name = r.Item.Name;
+            var viewModel   = new CustomNodeViewModel();
+            viewModel.nodes = this;
+            viewModel.Name  = prt.ProjectName;
             //n.BackColor = Colors.DarkOliveGreen;
             //n.IsCollapsed = true;
-            _networkViewModel.Nodes.Add(n);
+            _networkViewModel.Nodes.Add(viewModel);
 
-            var inp = new NodeInputViewModel();
-            inp.Name = "Referenced by";
-            inp.PortPosition = PortPosition.Left;
-            inp.MaxConnections = int.MaxValue;
-            n.Inputs.Add(inp);
+            var inViewModel             = new NodeInputViewModel();
+            inViewModel.Name            = "ReferencedBy: " + prt.ReferencedByCount;
+            inViewModel.PortPosition    = PortPosition.Left;
+            inViewModel.MaxConnections  = int.MaxValue;
+            viewModel.Inputs.Add(inViewModel);
 
-            var ou = new NodeOutputViewModel();
-            ou.Name = "References";
-            ou.PortPosition = PortPosition.Right;
-            ou.MaxConnections = int.MaxValue;
-            n.Outputs.Add(ou);
-            return n;
+            var outViewModel            = new NodeOutputViewModel();
+            outViewModel.Name           = "References: " + prt.ReferencesCount;
+            outViewModel.PortPosition   = PortPosition.Right;
+            outViewModel.MaxConnections = int.MaxValue;
+            viewModel.Outputs.Add(outViewModel);
+            return viewModel;
         }
 
         public static implicit operator bool(ProjectsNodesView n) => n != null;

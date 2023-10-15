@@ -7,7 +7,7 @@ using System.Windows;
 
 namespace DependencyGraph
 {
-    [Command(PackageIds.DependencyGraph)]
+    [Command(PackageIds.Show)]
     internal sealed class DependencyGraph : BaseCommand<DependencyGraph>
     {
         protected override async Task ExecuteAsync(OleMenuCmdEventArgs e)

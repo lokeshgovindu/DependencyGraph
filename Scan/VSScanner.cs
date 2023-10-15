@@ -1,5 +1,6 @@
 ﻿using EnvDTE;
 using EnvDTE80;
+using Microsoft.VisualStudio.Shell;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -13,16 +14,16 @@ namespace DependencyGraph.Scan
 {
     public class VSScanner
     {
-        private List<Project> _projects = new List<Project>();
-        private List<VSProject2> _vsprojects = new List<VSProject2>();
-        private bool _scanned = false;
+        private List<Project>       _projects   = new List<Project>();
+        private List<VSProject2>    _vsprojects = new List<VSProject2>();
+        private bool                _scanned    = false;
 
-        public List<Project> Projects { get => _projects; }
-        public List<VSProject2> Vsprojects { get => _vsprojects; }
-        public DTE2 _dte { get; set; }
-        public string SolutionName { get; set; }
-        public string StartupProjectName { get; set; }
-        public Project StartupProject { get; set; }
+        public List<Project>        Projects            { get => _projects; }
+        public List<VSProject2>     Vsprojects          { get => _vsprojects; }
+        public DTE2                 _dte                { get; set; }
+        public string               SolutionName        { get; set; }
+        public string               StartupProjectName  { get; set; }
+        public Project              StartupProject      { get; set; }
 
         public VSScanner(_DTE dte)
         {

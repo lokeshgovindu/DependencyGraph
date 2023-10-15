@@ -1,0 +1,11 @@
+digraph {
+    SolutionScan -> EmptyProject2
+    SolutionScan -> EmptyProject
+    SolutionNodes -> A
+    SolutionNodes -> EmptyProject
+    SolutionNodes -> SolutionScan
+    SolutionNodes -> X
+    SolutionNodesLauncher -> SolutionNodes
+    A -> EmptyProject
+    X -> A
+}

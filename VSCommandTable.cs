@@ -21,6 +21,6 @@ namespace DependencyGraph
     internal sealed partial class PackageIds
     {
         public const int MyMenuGroup = 0x0001;
-        public const int DependencyGraph = 0x0100;
+        public const int Show = 0x0100;
     }
 }

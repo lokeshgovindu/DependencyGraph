@@ -68,6 +68,7 @@
       <DependentUpon>MyCustomNodeView.xaml</DependentUpon>
     </Compile>
     <Compile Include="UI\ProjectsNodes.cs" />
+    <Compile Include="Scan\OutputHelper.cs" />
     <Compile Include="VSCommandTable.cs">
       <AutoGen>True</AutoGen>
       <DesignTime>True</DesignTime>
@@ -133,6 +134,7 @@
     <EmbeddedResource Include="Properties\Resources.resx">
       <Generator>ResXFileCodeGenerator</Generator>
       <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      <SubType>Designer</SubType>
     </EmbeddedResource>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

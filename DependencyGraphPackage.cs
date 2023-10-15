@@ -20,8 +20,8 @@ namespace DependencyGraph
     [Guid(PackageGuids.DependencyGraphString)]
     public sealed class DependencyGraphPackage : ToolkitPackage
     {
-        private static IServiceProvider serviceProvider;
-        private static DTE2 dte;
+        private static IServiceProvider _serviceProvider;
+        private static DTE2 _dte;
 
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
@@ -37,12 +37,12 @@ namespace DependencyGraph
 
         private void InitializeServices()
         {
-            dte = this.GetService<SDTE, SDTE>() as DTE2;
+            _dte = this.GetService<SDTE, SDTE>() as DTE2;
 
-            Debug.Assert(dte != null, "dte != null");
-            if (dte != null)
+            Debug.Assert(_dte != null, "dte != null");
+            if (_dte != null)
             {
-                DependencyGraphPackage.serviceProvider = this;
+                DependencyGraphPackage._serviceProvider = this;
             }
             else
             {
@@ -52,12 +52,12 @@ namespace DependencyGraph
 
         internal static IServiceProvider GetServiceProvider()
         {
-            return serviceProvider;
+            return _serviceProvider;
         }
 
         internal static DTE2 GetDTE()
         {
-            return dte;
+            return _dte;
         }
     }
 }

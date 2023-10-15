@@ -1,0 +1,26 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<DirectedGraph xmlns="http://schemas.microsoft.com/vs/2009/dgml">
+  <Nodes>
+    <Node Id="A" Label="A" />
+    <Node Id="EmptyProject" Label="EmptyProject" />
+    <Node Id="EmptyProject2" Label="EmptyProject2" />
+    <Node Id="SolutionNodes" Label="SolutionNodes" />
+    <Node Id="SolutionNodesLauncher" Label="SolutionNodesLauncher" />
+    <Node Id="SolutionScan" Label="SolutionScan" />
+    <Node Id="X" Label="X" />
+  </Nodes>
+  <Links>
+    <Link Source="A" Target="EmptyProject" />
+    <Link Source="SolutionNodes" Target="A" />
+    <Link Source="SolutionNodes" Target="EmptyProject" />
+    <Link Source="SolutionNodes" Target="SolutionScan" />
+    <Link Source="SolutionNodes" Target="X" />
+    <Link Source="SolutionNodesLauncher" Target="SolutionNodes" />
+    <Link Source="SolutionScan" Target="EmptyProject" />
+    <Link Source="SolutionScan" Target="EmptyProject2" />
+    <Link Source="X" Target="A" />
+  </Links>
+  <Properties>
+    <Property Id="Label" Label="Label" Description="Displayable label of an Annotatable object" DataType="System.String" />
+  </Properties>
+</DirectedGraph>

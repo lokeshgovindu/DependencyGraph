@@ -2,7 +2,10 @@
 using DependencyGraph.UI;
 using EnvDTE;
 using EnvDTE80;
+using Microsoft.VisualStudio.Shell.Interop;
 using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Forms;
@@ -13,11 +16,12 @@ namespace DependencyGraph
     /// <summary>
     /// Interaction logic for MainWindow.xaml
     /// </summary>
-    public partial class MainWindow : System.Windows.Window
+    public partial class MainWindow : System.Windows.Window, INotifyPropertyChanged
     {
-        private ProjectsNodesView _ns;
-        private _DTE _dte;
-        VSScanner _vsScanner;
+        private ProjectsNodesView   _ns;
+        private _DTE                _dte;
+        private VSScanner           _vsScanner;
+        private string              _statusBarText;
 
         public MainWindow(DTE2 dte)
         {
@@ -26,6 +30,9 @@ namespace DependencyGraph
 
             // To avoid showing in Alt+Tab
             this.Owner = System.Windows.Application.Current.MainWindow;
+
+            // Set the DataContext to the current window
+            DataContext = this;
 
             SetupContols();
             _dte = dte;
@@ -59,13 +66,26 @@ namespace DependencyGraph
             }
         }
 
+        public string StatusBarText
+        {
+            get { return _statusBarText; }
+            set
+            {
+                if (_statusBarText != value)
+                {
+                    _statusBarText = value;
+                    OnPropertyChanged(nameof(StatusBarText));
+                }
+            }
+        }
+
         private void OnProjectShowRequest(string projectName)
         {
             CBProjectNames.SelectedItem = projectName;
         }
 
         private const string ShowDeepestReferencesOnly = "Show Deepest References Only";
-        private const string ShowAllReferences = "Show All References";
+        private const string ShowAllReferences         = "Show All References";
         private const string ShowProjectReferencesOnly = "Show Project References Only";
 
         private Dictionary<string, ConnectionsVisibility> _displayMethods =
@@ -105,7 +125,8 @@ namespace DependencyGraph
 
             //this.Closing += (s, e) => { e.Cancel = true; };
 
-            Btn_SaveAs.Click += Btn_SaveAs_Click;
+            Btn_SaveAs.Click            += Btn_SaveAs_Click;
+            Btn_SaveSolutionDGML.Click  += Btn_SaveSolutionDGML_Click;
 
             CBDisplayMethod.SelectionChanged += (s, e) =>
             {
@@ -118,6 +139,7 @@ namespace DependencyGraph
                 if (displayMethodPrev != ConnectionsVisibility.Project && displayMethod != ConnectionsVisibility.Project)
                 {
                     _ns.DisplayMethod = displayMethod;
+                    UpdateStatusBarText(projectName);
                 }
                 else
                 {
@@ -138,17 +160,163 @@ namespace DependencyGraph
 
         private void Btn_SaveAs_Click(object sender, RoutedEventArgs e)
         {
+            string filter = "PNG Image File (*.png)    |*.png|" +   // FilterIndex - 1
+                            "DGML Files (*.dgml)       |*.dgml|" +  // FilterIndex - 2
+                            "Graphviz DOT File (*.dot) |*.dot";     // FilterIndex - 3
+            if (ExistsOnPath("dot.exe"))
+            {
+                filter += "|Graphviz SVG File (*.svg)|*.svg" +      // FilterIndex - 4
+                          "|Graphviz PNG File (*.png)|*.png";       // FilterIndex - 5
+            }
+
             SaveFileDialog saveFileDialog = new SaveFileDialog
             {
                 InitialDirectory = null,
-                FileName = CBProjectNames.SelectedItem.ToString() + ".png",
-                Filter = "PNG image file (*.png)|*.png"
+                FileName         = CBProjectNames.SelectedItem.ToString() + ".png",
+                Filter           = filter,
+                Title            = "Save Project Dependency Graph As"
             };
 
-            if (saveFileDialog.ShowDialog() == System.Windows.Forms.DialogResult.OK)
+            if (saveFileDialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+                return;
+
+            bool saved = false;
+            string caption = string.Empty;
+
+            switch (saveFileDialog.FilterIndex)
             {
-                ImageSaver.SaveAsPNG(_ns.View, saveFileDialog.FileName);
+                case 1:
+                    saved = ImageSaver.AsPNG(_ns.View, saveFileDialog.FileName);
+                    caption = "Create PNG";
+                    break;
+
+                case 2:
+                    saved = OutputHelper.CreateProjectDGML(_ns.PRT, saveFileDialog.FileName);
+                    caption = "Create Project DGML";
+                    break;
+
+                case 3:
+                    saved = OutputHelper.CreateGraphvizDot(_ns.PRT, saveFileDialog.FileName);
+                    caption = "Create Project Graphviz Dot File";
+                    break;
+
+                case 4:
+                    saved = OutputHelper.CreateGraphvizSVG(_ns.PRT, saveFileDialog.FileName);
+                    caption = "Create Project Graphviz SVG File";
+                    break;
+
+                case 5:
+                    saved = OutputHelper.CreateGraphvizPNG(_ns.PRT, saveFileDialog.FileName);
+                    caption = "Create Project Graphviz PNG File";
+                    break;
+
+                default:
+                    break;
             }
+
+            string message;
+            MessageBoxImage icon = MessageBoxImage.Information;
+            if (saved)
+            {
+                message = string.Format("Output file '{0}' has been created.", saveFileDialog.FileName);
+            }
+            else
+            {
+                message = string.Format("Failed to create output file '{0}'.", saveFileDialog.FileName);
+                icon = MessageBoxImage.Error;
+            }
+
+            System.Windows.MessageBox.Show(message, caption, MessageBoxButton.OK, icon);
+        }
+
+        public static bool ExistsOnPath(string fileName)
+        {
+            return GetFullPath(fileName) != null;
+        }
+
+        public static string GetFullPath(string fileName)
+        {
+            if (File.Exists(fileName))
+                return Path.GetFullPath(fileName);
+
+            var values = Environment.GetEnvironmentVariable("PATH");
+            foreach (var path in values.Split(Path.PathSeparator))
+            {
+                var fullPath = Path.Combine(path, fileName);
+                if (File.Exists(fullPath))
+                    return fullPath;
+            }
+            return null;
+        }
+
+        private void Btn_SaveSolutionDGML_Click(object sender, RoutedEventArgs e)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            string fileName = Path.GetFileNameWithoutExtension(_vsScanner._dte.Solution.FullName);
+
+            string filter = "DGML Files (*.dgml)       |*.dgml|" +  // FilterIndex - 1
+                            "Graphviz DOT File (*.dot) |*.dot";     // FilterIndex - 2
+            if (ExistsOnPath("dot.exe"))
+            {
+                filter += "|Graphviz SVG File (*.svg)|*.svg" +      // FilterIndex - 3
+                          "|Graphviz PNG File (*.png)|*.png";       // FilterIndex - 4
+            }
+
+            SaveFileDialog saveFileDialog = new SaveFileDialog
+            {
+                InitialDirectory = null,
+                FileName         = fileName + ".dgml",
+                Filter           = filter,
+                Title            = "Save Solution Dependency Graph As"
+
+            };
+
+            if (saveFileDialog.ShowDialog() != System.Windows.Forms.DialogResult.OK)
+            {
+                return;
+            }
+
+            bool saved = false;
+            string caption = string.Empty;
+            switch (saveFileDialog.FilterIndex)
+            {
+                case 1:
+                    saved = OutputHelper.CreateSolutionDGML(_vsScanner, saveFileDialog.FileName);
+                    caption = "Create Solution DGML File";
+                    break;
+
+                case 2:
+                    saved = OutputHelper.CreateSolutionGraphvizDot(_vsScanner, saveFileDialog.FileName);
+                    caption = "Create Solution Graphviz Dot File";
+                    break;
+
+                case 3:
+                    saved = OutputHelper.CreateSolutionGraphvizSVG(_vsScanner, saveFileDialog.FileName);
+                    caption = "Create Solution Graphviz SVG File";
+                    break;
+
+                case 4:
+                    saved = OutputHelper.CreateSolutionGraphvizPNG(_vsScanner, saveFileDialog.FileName);
+                    caption = "Create Solution Graphviz PNG File";
+                    break;
+
+                default:
+                    break;
+            }
+
+            string message;
+            MessageBoxImage icon = MessageBoxImage.Information;
+            if (saved)
+            {
+                message = string.Format("Output file '{0}' has been created.", saveFileDialog.FileName);
+            }
+            else
+            {
+                message = string.Format("Failed to create output file '{0}'.", saveFileDialog.FileName);
+                icon = MessageBoxImage.Error;
+            }
+
+            System.Windows.MessageBox.Show(message, caption, MessageBoxButton.OK, icon);
         }
 
         private void SelectionChangedHandler(string projectName, ConnectionsVisibility displayMethod)
@@ -177,7 +345,24 @@ namespace DependencyGraph
             }
             if (!prt) { Close(); return; }
             _ns.PRT = prt;
+            UpdateStatusBarText(projectName);
             //_ns.ShowConnections();
+        }
+
+        private void UpdateStatusBarText(string projectName)
+        {
+            //StatusBarText = String.Format("ProjectName: {0}    Nodes: {1}    Connections: {2}", projectName, _ns.NodesCount, _ns.ConnectionsCount);
+            SB_ProjectName.Text = String.Format("ProjectName: {0}", projectName);
+            SB_Nodes.Text       = String.Format("Nodes: {0}", _ns.NodesCount);
+            SB_Connections.Text = String.Format("Connections: {0}", _ns.ConnectionsCount);
+        }
+
+        // Implement INotifyPropertyChanged to notify the UI of property changes
+        public event PropertyChangedEventHandler PropertyChanged;
+
+        protected virtual void OnPropertyChanged(string propertyName)
+        {
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
         }
 
         #region Helper methods
