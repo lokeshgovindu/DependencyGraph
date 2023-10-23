@@ -1,9 +1,6 @@
 ﻿using EnvDTE;
 using EnvDTE80;
-using Microsoft.VisualStudio.Shell;
-using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using VSLangProj;
 using VSLangProj80;
 using static System.Console;
@@ -126,38 +123,46 @@ namespace DependencyGraph.Scan
             return true;
         }
 
-        private bool IsProject(Project p)
+        const string PROJECT_FOLDERS     = "{66A26720-8FB5-11D2-AA7E-00C04F688DDE}";
+        const string SOLUTION_FOLDER     = "{2150E333-8FDC-42A3-9474-1A3956D46DE8}";
+        const string MISCELLANEOUS_FILES = "{66A2671D-8FB5-11D2-AA7E-00C04F688DDE}";
+
+        // Ref: https://github.com/JamesW75/visual-studio-project-type-guid
+        static bool IsProject(Project p)
         {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            //var pn = p.Name; 
-            //return p.Kind == "{66A26720-8FB5-11D2-AA7E-00C04F688DDE}"; // Project Folders
-            return p.Kind == "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}" ||    // C#
-                p.Kind == "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}";  // C++
+            bool notAProject = (
+                p.Kind == PROJECT_FOLDERS ||
+                p.Kind == SOLUTION_FOLDER ||
+                p.Kind == MISCELLANEOUS_FILES
+            );
+            return !notAProject;
+
+            //return
+            //    p.Kind == "{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}" ||   // C++
+            //    p.Kind == "{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}" ||   // C#
+            //    p.Kind == "{F184B08F-C81C-45F6-A57F-5ABD9991F28F}";     // VB
         }
         #endregion
     }
 
     public static class ProjectExtensions
     {
-
         public static List<Project> ProjectReferences(this Project p)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
-            var l = new List<Project>();
-            Debug.WriteLine($"cheking references of: {p.Name}");
-            foreach (Reference r in p.ass<VSProject>().References)
+            var projects = new List<Project>();
+            VSProject vsProject = p.Object as VSProject;
+            foreach (Reference projRef in vsProject.References)
             {
-                if (r.SourceProject == null) continue;
-                l.Add(r.SourceProject);
+                if (projRef == null) continue;
+                try
+                {
+                    if (projRef.SourceProject == null) continue;
+                }
+                catch { continue; }
+                projects.Add(projRef.SourceProject);
             }
-            return l;
-        }
-
-        public static T ass<T>(this Project p) where T : class
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            return p.Object as T;
+            return projects;
         }
     }
-
 }

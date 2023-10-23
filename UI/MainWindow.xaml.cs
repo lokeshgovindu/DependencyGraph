@@ -352,9 +352,10 @@ namespace DependencyGraph
         private void UpdateStatusBarText(string projectName)
         {
             //StatusBarText = String.Format("ProjectName: {0}    Nodes: {1}    Connections: {2}", projectName, _ns.NodesCount, _ns.ConnectionsCount);
-            SB_ProjectName.Text = String.Format("ProjectName: {0}", projectName);
-            SB_Nodes.Text       = String.Format("Nodes: {0}", _ns.NodesCount);
-            SB_Connections.Text = String.Format("Connections: {0}", _ns.ConnectionsCount);
+            SB_ProjectName.Text   = String.Format("ProjectName: {0}", projectName);
+            SB_Nodes.Text         = String.Format("Nodes: {0}", _ns.NodesCount);
+            SB_Connections.Text   = String.Format("Connections: {0}", _ns.ConnectionsCount);
+            SB_ProjectsCount.Text = String.Format("#Projects in Solution: {0}", _vsScanner.Projects.Count);
         }
 
         // Implement INotifyPropertyChanged to notify the UI of property changes

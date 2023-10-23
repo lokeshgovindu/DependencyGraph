@@ -57,6 +57,9 @@
                 <StatusBarItem>
                     <TextBlock Name="SB_Connections" Text=""/>
                 </StatusBarItem>
+                <StatusBarItem HorizontalAlignment="Right">
+                    <TextBlock Name="SB_ProjectsCount" Text=""/>
+                </StatusBarItem>
             </StatusBar>
         </Grid>
     </Grid>
