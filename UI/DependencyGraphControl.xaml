@@ -1,0 +1,117 @@
+﻿<UserControl x:Class="DependencyGraph.UI.DependencyGraphControl"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
+             mc:Ignorable="d"
+             d:DesignHeight="600" d:DesignWidth="1000"
+             Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
+             Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}">
+    <!--
+        Themed with the shell's own brushes rather than the Community toolkit's
+        Themes.UseVsTheme: that attached property loads a ResourceDictionary from a pack URI and
+        threw a resource-loading exception inside MergeStyles when the tool window was created,
+        which took the whole control down. DynamicResource degrades to the default brush if a key
+        is ever missing, so it cannot fail the same way.
+    -->
+    <UserControl.Resources>
+        <!--
+            ToolBar substitutes its own foreground for its items, which left these labels dark
+            grey on the dark theme's dark background. Setting it explicitly from the shell brush
+            keeps them readable in both themes.
+        -->
+        <Style x:Key="ToolBarLabel" TargetType="TextBlock">
+            <Setter Property="VerticalAlignment" Value="Center"/>
+            <Setter Property="Margin" Value="2,0,4,0"/>
+            <Setter Property="Foreground"
+                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"/>
+        </Style>
+    </UserControl.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <ToolBarTray x:Name="Tray" Grid.Row="0" IsLocked="True">
+            <ToolBar x:Name="MainToolBar" ToolBarTray.IsLocked="True">
+                <TextBlock x:Name="Lbl_Project" Text="Project" Style="{StaticResource ToolBarLabel}"/>
+                <ComboBox x:Name="CBProjectNames"
+                          Width="230" Height="22"
+                          IsEditable="True"
+                          IsTextSearchEnabled="True"
+                          StaysOpenOnEdit="True"
+                          ToolTip="Project to show the reference tree for. Type to search."
+                          VerticalContentAlignment="Center"/>
+
+                <Separator/>
+
+                <TextBlock x:Name="Lbl_Show" Text="Show" Style="{StaticResource ToolBarLabel}"/>
+                <ComboBox x:Name="CBDisplayMethod"
+                          Width="190" Height="22"
+                          ToolTip="Which references to draw as edges."
+                          VerticalContentAlignment="Center"/>
+
+                <Separator/>
+
+                <TextBlock x:Name="Lbl_Direction" Text="Direction" Style="{StaticResource ToolBarLabel}"/>
+                <ComboBox x:Name="CBOrientation"
+                          Width="130" Height="22"
+                          ToolTip="Direction the reference depth grows in."
+                          VerticalContentAlignment="Center"/>
+
+                <Separator/>
+
+                <Button x:Name="Btn_ZoomFit" Height="22" Padding="6,0"
+                        ToolTip="Fit the whole graph in the window.">Fit</Button>
+                <Button x:Name="Btn_Refresh" Height="22" Padding="6,0" Margin="3,0,0,0"
+                        ToolTip="Rescan the solution.">Refresh</Button>
+
+                <Separator/>
+
+                <Button x:Name="Btn_SaveAs" Height="22" Padding="6,0"
+                        ToolTip="Save this project's graph as PNG, DGML or Graphviz.">Save As...</Button>
+                <Button x:Name="Btn_SaveSolutionDGML" Height="22" Padding="6,0" Margin="3,0,0,0"
+                        ToolTip="Save the whole solution's graph as DGML or Graphviz.">Save Solution Graph...</Button>
+            </ToolBar>
+        </ToolBarTray>
+
+        <!-- GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border. -->
+        <Grid x:Name="GraphHost" Grid.Row="1" ClipToBounds="True"/>
+
+        <TextBlock x:Name="EmptyMessage"
+                   Grid.Row="1"
+                   Visibility="Collapsed"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"
+                   TextAlignment="Center" TextWrapping="Wrap"
+                   MaxWidth="420" Opacity="0.75"/>
+
+        <StatusBar x:Name="StatusBarMain" Grid.Row="2">
+            <StatusBarItem>
+                <TextBlock x:Name="SB_ProjectName" Text=""/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock x:Name="SB_Nodes" Text=""/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock x:Name="SB_Connections" Text=""/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock x:Name="SB_Zoom" Text=""/>
+            </StatusBarItem>
+            <Separator/>
+            <StatusBarItem>
+                <TextBlock x:Name="SB_Selection" Text=""/>
+            </StatusBarItem>
+            <StatusBarItem DockPanel.Dock="Right" HorizontalAlignment="Right">
+                <TextBlock x:Name="SB_ProjectsCount" Text=""/>
+            </StatusBarItem>
+        </StatusBar>
+    </Grid>
+</UserControl>

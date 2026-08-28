@@ -17,6 +17,9 @@ namespace DependencyGraph
     [InstalledProductRegistration(Vsix.Name, Vsix.Description, Vsix.Version)]
     [ProvideMenuResource("Menus.ctmenu", 1)]
     [ProvideAutoLoad(VSConstants.UICONTEXT.SolutionExists_string, PackageAutoLoadFlags.BackgroundLoad)]
+    // MDI puts the graph in the document area in the middle, where it has room, rather than
+    // tabbing it into the narrow Solution Explorer dock.
+    [ProvideToolWindow(typeof(UI.DependencyGraphWindow.Pane), Style = VsDockStyle.MDI)]
     [Guid(PackageGuids.DependencyGraphString)]
     public sealed class DependencyGraphPackage : ToolkitPackage
     {
@@ -26,6 +29,7 @@ namespace DependencyGraph
         protected override async Task InitializeAsync(CancellationToken cancellationToken, IProgress<ServiceProgressData> progress)
         {
             await this.RegisterCommandsAsync();
+            UI.DependencyGraphWindow.Initialize(this);
             await JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
 
             var shellService = await this.GetServiceAsync(typeof(SVsShell)) as IVsShell;

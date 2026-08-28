@@ -28,7 +28,11 @@ namespace DependencyGraph.Scan
             _dte = dte as DTE2;
             Run();
             _scanned = true;
-            StartupProject = GetProject(StartupProjectName);
+            if (StartupProjectName != null) StartupProject = GetProject(StartupProjectName);
+
+            // The startup project can be missing, unloaded, or of a kind we do not enumerate,
+            // so fall back to the first project rather than handing back null.
+            if (StartupProject == null && _projects.Count > 0) StartupProject = _projects[0];
         }
 
         public void Run()
@@ -37,7 +41,12 @@ namespace DependencyGraph.Scan
             ThreadHelper.ThrowIfNotOnUIThread();
 
             SolutionName = _dte.Solution.FullName;
-            StartupProjectName = ((Array)_dte.Solution.SolutionBuild.StartupProjects).GetValue(0).ToString();
+
+            // A solution need not have a startup project set, and for some solution types
+            // StartupProjects comes back null or empty - which used to throw here.
+            var startupProjects = _dte.Solution.SolutionBuild?.StartupProjects as Array;
+            if (startupProjects != null && startupProjects.Length > 0)
+                StartupProjectName = startupProjects.GetValue(0)?.ToString();
 
             var items = _dte.Solution.Projects;
             foreach (Project p in items)
@@ -151,8 +160,26 @@ namespace DependencyGraph.Scan
         {
             ThreadHelper.ThrowIfNotOnUIThread();
             var projects = new List<Project>();
+
+            // Only VSLangProj projects (C#, VB, F#) expose references this way. C++, database,
+            // shared and unloaded projects hand back null, so they simply have no references we
+            // can read - they used to crash here with a NullReferenceException.
             VSProject vsProject = p.Object as VSProject;
-            foreach (Reference projRef in vsProject.References)
+            if (vsProject == null) return projects;
+
+            References references;
+            try
+            {
+                references = vsProject.References;
+            }
+            catch
+            {
+                // An unloaded or broken project throws rather than returning null.
+                return projects;
+            }
+            if (references == null) return projects;
+
+            foreach (Reference projRef in references)
             {
                 if (projRef == null) continue;
                 try
