@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <PackageManifest Version="2.0.0" xmlns="http://schemas.microsoft.com/developer/vsx-schema/2011" xmlns:d="http://schemas.microsoft.com/developer/vsx-schema-design/2011">
     <Metadata>
-        <Identity Id="DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb" Version="2023.3.0.3" Language="en-US" Publisher="Lokesh Govindu" />
+        <Identity Id="DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb" Version="2026.1.0.0" Language="en-US" Publisher="Lokesh Govindu" />
         <DisplayName>DependencyGraph</DisplayName>
         <Description xml:space="preserve">Draws your solution's project reference graph in a dockable tool window, in any edition of Visual Studio - Code Map needs Enterprise. Five views, including what depends on a project and the whole solution at once; boxes per solution folder that collapse to one node; drag anything where you want it. Exports to PNG, DGML and Graphviz. Nothing to install: Graphviz is only needed for its own SVG/PNG export.</Description>
         <MoreInfo>https://marketplace.visualstudio.com/items?itemName=LokeshGovindu.DependencyGraph</MoreInfo>

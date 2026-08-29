@@ -9,10 +9,10 @@ namespace DependencyGraph
     {
         public const string Id          = "DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb";
         public const string Name        = "DependencyGraph";
-        public const string Description = @"Display visual studio project dependency graph.";
+        public const string Description = @"Draws your solution's project reference graph in a dockable tool window, in any edition of Visual Studio - Code Map needs Enterprise. Five views, including what depends on a project and the whole solution at once; boxes per solution folder that collapse to one node; drag anything where you want it. Exports to PNG, DGML and Graphviz. Nothing to install: Graphviz is only needed for its own SVG/PNG export.";
         public const string Language    = "en-US";
-        public const string Version     = "2023.3.0.3";
+        public const string Version     = "2026.1.0.0";
         public const string Author      = "Lokesh Govindu";
-        public const string Tags        = "DependencyGraph";
+        public const string Tags        = "dependency graph, project references, dependencies, solution, visualization, diagram, architecture, code map, dgml, graphviz, refactoring, build";
     }
 }
