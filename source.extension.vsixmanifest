@@ -3,11 +3,12 @@
     <Metadata>
         <Identity Id="DependencyGraph.b16f35c3-ecb1-4300-82b8-c04a14f874cb" Version="2023.3.0.3" Language="en-US" Publisher="Lokesh Govindu" />
         <DisplayName>DependencyGraph</DisplayName>
-        <Description xml:space="preserve">Displays a Visual Studio solution's project dependency graph in a dockable tool window. Graphviz is optional and only needed for the SVG/PNG export.</Description>
+        <Description xml:space="preserve">Draws your solution's project reference graph in a dockable tool window, in any edition of Visual Studio - Code Map needs Enterprise. Five views, including what depends on a project and the whole solution at once; boxes per solution folder that collapse to one node; drag anything where you want it. Exports to PNG, DGML and Graphviz. Nothing to install: Graphviz is only needed for its own SVG/PNG export.</Description>
         <MoreInfo>https://marketplace.visualstudio.com/items?itemName=LokeshGovindu.DependencyGraph</MoreInfo>
         <ReleaseNotes>https://github.com/lokeshgovindu/DependencyGraph/releases</ReleaseNotes>
         <Icon>Resources\Icon.png</Icon>
         <PreviewImage>Resources\Icon.png</PreviewImage>
+        <Tags>dependency graph, project references, dependencies, solution, visualization, diagram, architecture, code map, dgml, graphviz, refactoring, build</Tags>
     </Metadata>
     <Installation>
         <InstallationTarget Id="Microsoft.VisualStudio.Community" Version="[17.0, 19.0)">

@@ -65,9 +65,17 @@ left.
 ## Move things where you want them
 
 Automatic layout is a starting point. Drag a node, or a whole folder box, to where the graph
-reads better - its references follow it and nothing else moves. What you dragged is remembered
-across rebuilds, so changing view, direction or depth does not throw your arrangement away.
-**Reset layout** puts everything back.
+reads better — its references follow it and nothing else moves.
+
+What you dragged is remembered per solution: through a rebuild, so changing view, direction or
+depth does not throw your arrangement away, and on disk, so it is still there after you close the
+solution and after you close Visual Studio. **Reset layout** puts everything back.
+
+## External references
+
+A project that is referenced but is not part of the solution is drawn with a dashed border and
+labelled `(external)` - its own references were never scanned, so the graph below it is
+incomplete by definition rather than by accident.
 
 ## Circular references
 
