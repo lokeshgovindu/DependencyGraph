@@ -1,4 +1,4 @@
-﻿using DependencyGraph.Scan;
+using DependencyGraph.Scan;
 using EnvDTE80;
 using Microsoft.VisualStudio.GraphModel;
 using System;
@@ -260,6 +260,7 @@ namespace DependencyGraph.Scan
 
         internal static bool CreateSolutionGraphvizSVG(VSScanner vsScanner, string outputFilePath)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             string dotFilePath = outputFilePath + ".dot";
             CreateSolutionGraphvizDot(vsScanner, dotFilePath);
             return RenderAndCleanUp(dotFilePath, "svg", outputFilePath);
@@ -267,6 +268,7 @@ namespace DependencyGraph.Scan
 
         internal static bool CreateSolutionGraphvizPNG(VSScanner vsScanner, string outputFilePath)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             string dotFilePath = outputFilePath + ".dot";
             CreateSolutionGraphvizDot(vsScanner, dotFilePath);
             return RenderAndCleanUp(dotFilePath, "png", outputFilePath);

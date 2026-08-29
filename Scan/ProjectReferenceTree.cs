@@ -1,4 +1,4 @@
-﻿using EnvDTE;
+using EnvDTE;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -353,6 +353,7 @@ namespace DependencyGraph.Scan
 
         public ProjectReferenceTree(Project project, ProjectReferenceTree projectReferenceTree = null, int depthLevel = 0)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
             this.Item       = project;
             this.DepthLevel = depthLevel;
 

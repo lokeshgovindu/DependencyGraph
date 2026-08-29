@@ -101,6 +101,11 @@ namespace DependencyGraph.UI
             _viewer.ViewChangeEvent += (s, e) => UpdateZoomIndicator();
             GraphHost.SizeChanged += GraphHost_SizeChanged;
 
+            // The control is built by the tool window on the UI thread, and every handler wired up
+            // below runs there too. Asserting it once here is what tells the threading analyzer so,
+            // instead of the same assertion repeated inside a dozen lambdas.
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             BuildNodeContextMenu();
             SetUpNodeTooltip();
             PopulateFixedControls();
@@ -294,6 +299,8 @@ namespace DependencyGraph.UI
 
         private void OnSolutionOpened(Community.VisualStudio.Toolkit.Solution solution)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             // The picker and the graph both belong to the previous solution.
             ForgetSolution();
             Rescan();
@@ -314,12 +321,14 @@ namespace DependencyGraph.UI
         /// </remarks>
         private void OnProjectSetChanged(Community.VisualStudio.Toolkit.Project project)
         {
-            Dispatcher.BeginInvoke(new Action(() =>
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            Later(System.Windows.Threading.DispatcherPriority.ApplicationIdle, () =>
             {
                 if (_dte == null) return;
                 ForgetSolution();
                 Rescan();
-            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            });
         }
 
         /// <summary>Drops everything tied to the solution that was open.</summary>
@@ -373,6 +382,8 @@ namespace DependencyGraph.UI
         /// </remarks>
         private void OnVsThemeChanged(Microsoft.VisualStudio.PlatformUI.ThemeChangedEventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             _palette = GraphPalette.ForVsTheme();
             ApplyTheme();
             Rebuild();
@@ -458,8 +469,26 @@ namespace DependencyGraph.UI
             // Deferred to after the layout pass: MSAGL rescales its transform by the change in
             // fit factor whenever the canvas is resized, so setting 100% before the tool window
             // has settled at its final size gets multiplied straight back out of 100%.
-            Dispatcher.BeginInvoke(new Action(ApplyActualSize),
-                System.Windows.Threading.DispatcherPriority.Loaded);
+            Later(System.Windows.Threading.DispatcherPriority.Loaded, ApplyActualSize);
+        }
+
+        /// <summary>
+        /// Runs <paramref name="action"/> later on this same thread, at the given dispatcher
+        /// priority.
+        /// </summary>
+        /// <remarks>
+        /// VSTHRD001 objects to the dispatcher, on the grounds that switching threads with it can
+        /// deadlock. Neither caller here is switching threads: both are already on the UI thread,
+        /// and what they want is the priority - to run after WPF has finished a layout pass, or
+        /// after the shell has finished applying a change to the solution.
+        /// JoinableTaskFactory.SwitchToMainThreadAsync cannot express either of those, so the rule
+        /// is suppressed once, here, next to the reason, rather than at each call site.
+        /// </remarks>
+        private void Later(System.Windows.Threading.DispatcherPriority priority, Action action)
+        {
+#pragma warning disable VSTHRD001
+            _ = Dispatcher.InvokeAsync(action, priority);
+#pragma warning restore VSTHRD001
         }
 
         private void ApplyActualSize()
@@ -805,6 +834,8 @@ namespace DependencyGraph.UI
 
         private void Viewer_MouseDown(object sender, Microsoft.Msagl.Drawing.MsaglMouseEventArgs e)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             var node = NodeUnderCursor();
 
             // Anything under the pointer can be dragged. Nothing moves until the pointer does,
@@ -1101,6 +1132,8 @@ namespace DependencyGraph.UI
         /// </remarks>
         private void ResetPositions()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             bool had = _dragOffsets.Count > 0;
 
             _dragOffsets.Clear();
@@ -1146,6 +1179,8 @@ namespace DependencyGraph.UI
         /// </remarks>
         private void WatchForFolderCollapse()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             foreach (var entity in _viewer.Entities)
             {
                 var vnode = entity as VNode;
@@ -1158,12 +1193,16 @@ namespace DependencyGraph.UI
 
         private void CollapseFolder(string folder)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             if (string.IsNullOrEmpty(folder) || !_collapsedFolders.Add(folder)) return;
             Rebuild();
         }
 
         private void ExpandFolder(string folder)
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             if (string.IsNullOrEmpty(folder) || !_collapsedFolders.Remove(folder)) return;
             Rebuild();
         }
@@ -1180,6 +1219,8 @@ namespace DependencyGraph.UI
         /// </summary>
         private void ApplyFocus()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             var keys = _selectedNodes
                 .Select(n => GraphBuilder.ProjectOf(n)?.Key)
                 .Where(k => k != null)
@@ -1339,6 +1380,8 @@ namespace DependencyGraph.UI
 
         private void BuildNodeContextMenu()
         {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
             var menu = new ContextMenu();
 
             var referencing = new MenuItem { Header = "Highlight referencing projects" };

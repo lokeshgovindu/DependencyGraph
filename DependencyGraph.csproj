@@ -71,7 +71,9 @@
     <Compile Include="UI\GraphPalette.cs" />
     <Compile Include="UI\ProjectChoice.cs" />
     <Compile Include="State\NodePositions.cs" />
-    <Compile Include="State\Settings.cs" />
+    <Compile Include="State\Settings.cs">
+      <SubType>Component</SubType>
+    </Compile>
     <Compile Include="Scan\OutputHelper.cs" />
     <Compile Include="VSCommandTable.cs">
       <AutoGen>True</AutoGen>
@@ -148,15 +150,10 @@
     comments at the top of that file. Defined after the import so it overrides the SDK's target;
     GeneratePkgDefFile stays true so PkgdefProjectOutputGroup still hands the file to the VSIX.
   -->
-  <Target Name="GeneratePkgDef"
-          Condition="'$(GeneratePkgDefFile)'=='true'"
-          Inputs="$(MSBuildProjectDirectory)\DependencyGraph.pkgdef"
-          Outputs="$(IntermediateOutputPath)$(TargetName).pkgdef">
-    <Message Importance="normal"
-             Text="Using the checked-in DependencyGraph.pkgdef (VSSDK CreatePkgDef is bypassed)." />
+  <Target Name="GeneratePkgDef" Condition="'$(GeneratePkgDefFile)'=='true'" Inputs="$(MSBuildProjectDirectory)\DependencyGraph.pkgdef" Outputs="$(IntermediateOutputPath)$(TargetName).pkgdef">
+    <Message Importance="normal" Text="Using the checked-in DependencyGraph.pkgdef (VSSDK CreatePkgDef is bypassed)." />
     <MakeDir Directories="$(IntermediateOutputPath)" />
-    <Copy SourceFiles="$(MSBuildProjectDirectory)\DependencyGraph.pkgdef"
-          DestinationFiles="$(IntermediateOutputPath)$(TargetName).pkgdef" />
+    <Copy SourceFiles="$(MSBuildProjectDirectory)\DependencyGraph.pkgdef" DestinationFiles="$(IntermediateOutputPath)$(TargetName).pkgdef" />
     <ItemGroup>
       <FileWrites Include="$(IntermediateOutputPath)$(TargetName).pkgdef" />
     </ItemGroup>
