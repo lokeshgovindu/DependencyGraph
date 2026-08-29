@@ -6,7 +6,7 @@ dockable tool window — laid out properly, not just dumped to a file.
 Useful when you are working out what a project actually drags in, why a build takes so long,
 whether a reference can be removed, or where a circular reference crept in.
 
-![The tool window](docs/tool-window.png)
+![The tool window](docs/screenshots/tool-window.png)
 
 ## Contents
 
@@ -106,7 +106,7 @@ Solution Explorer and press **Refresh** to rescan.
 
 Every control has a tooltip saying what it is for — and, where it matters, what it will not do:
 
-![The Focus tooltip](docs/focus-tooltip.png)
+![The Focus tooltip](docs/screenshots/focus-tooltip.png)
 
 ## Views
 
@@ -125,11 +125,11 @@ On the sample solution above, the same seven projects give 6 connections under *
 
 Everything that depends on one project, which no other view shows:
 
-![The impact view](docs/impact-view.png)
+![The impact view](docs/screenshots/impact-view.png)
 
 The whole solution at once, with the one project nothing else references drawn as a root:
 
-![The whole-solution view](docs/solution-view.png)
+![The whole-solution view](docs/screenshots/solution-view.png)
 
 **Depth** is the other lever. `All` follows the references as far as they go; a number stops
 after that many levels. Whole levels are cut cleanly — you never get an arrow pointing at a
@@ -154,7 +154,7 @@ project that was left out.
 
 Hovering a node says the rest - a box only has room for a short name:
 
-![The node tooltip](docs/node-tooltip.png)
+![The node tooltip](docs/screenshots/node-tooltip.png)
 
 ## Highlighting
 
@@ -216,11 +216,11 @@ labelled with its name and the number of projects in it, and every reference int
 folder is redrawn against that node. Click the collapsed node to expand it again. On a solution
 with a few hundred projects this is the fastest way to something readable.
 
-![Grouping and the legend](docs/grouped-and-legend.png)
+![Grouping and the legend](docs/screenshots/grouped-and-legend.png)
 
 And with `Components` collapsed to a single node:
 
-![A collapsed solution folder](docs/collapsed-folder.png)
+![A collapsed solution folder](docs/screenshots/collapsed-folder.png)
 
 ## Moving things about
 

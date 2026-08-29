@@ -6,7 +6,7 @@ properly, inside the IDE.
 Useful when you are working out what a project actually drags in, why a build takes so long,
 whether a reference can be removed, or where a circular reference crept in.
 
-![The tool window](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/tool-window.png)
+![The tool window](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/screenshots/tool-window.png)
 
 ## Works in Community and Professional
 
@@ -42,9 +42,9 @@ reference counts and path.
   four start at one project and only reach what it reaches; this shows a solution with several
   entry points whole.
 
-![The impact view](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/impact-view.png)
+![The impact view](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/screenshots/impact-view.png)
 
-![The whole solution](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/solution-view.png)
+![The whole solution](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/screenshots/solution-view.png)
 
 ## Finding your way around a big solution
 
@@ -56,7 +56,7 @@ Three levers, which matter once a solution runs to hundreds of projects:
   Click the chevron beside a name to collapse that folder to a single node, with its references
   aggregated onto it; click the node to expand it again.
 
-![Grouping and the legend](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/grouped-and-legend.png)
+![Grouping and the legend](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/screenshots/grouped-and-legend.png)
 
 Plus an **Excluded projects** setting for the test and benchmark projects that reference half the
 solution, and four layout **Directions**: top to bottom, left to right, bottom to top, right to
