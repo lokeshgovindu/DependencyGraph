@@ -53,7 +53,10 @@ namespace DependencyGraph.UI
 
             foreach (var project in prt.AllPRTs)
             {
-                var node = graph.AddNode(project.ProjectName);
+                // Node id is the project's stable key, not its name: two projects in different
+                // solution folders can share a name, and using the name merged them into one
+                // node. The name is only the label.
+                var node = graph.AddNode(project.Key);
                 node.UserData = project;
                 node.LabelText = project.ProjectName;
 
@@ -83,7 +86,7 @@ namespace DependencyGraph.UI
             {
                 foreach (var project in prt.AllPRTs)
                     foreach (var reference in project.References)
-                        Style(graph.AddEdge(project.ProjectName, reference.ProjectName), palette);
+                        Style(graph.AddEdge(project.Key, reference.Key), palette);
 
                 return;
             }
@@ -94,7 +97,7 @@ namespace DependencyGraph.UI
             {
                 var referencedBy = project.GetDeepestReference();
                 if (referencedBy == null || referencedBy == project) continue;
-                Style(graph.AddEdge(referencedBy.ProjectName, project.ProjectName), palette);
+                Style(graph.AddEdge(referencedBy.Key, project.Key), palette);
             }
         }
 

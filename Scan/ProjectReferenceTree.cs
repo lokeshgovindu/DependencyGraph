@@ -1,75 +1,125 @@
 ﻿using EnvDTE;
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
-using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using Project = EnvDTE.Project;
 
 namespace DependencyGraph.Scan
 {
+    /// <summary>
+    /// One project in a reference graph, plus the shared bookkeeping for the whole graph
+    /// (<see cref="AllPRTs"/> and the owner map behind <see cref="GetDeepestReference"/>).
+    /// </summary>
     public class ProjectReferenceTree
     {
         public static Func<ProjectReferenceTree, string> toString;
 
+        /// <summary>Display name of the project. Not unique within a solution.</summary>
         public string ProjectName;
+
+        /// <summary>
+        /// Stable identity of the project, used as the graph node id and as the key of
+        /// <see cref="Proj2ProjRefTreeMap"/>.
+        /// </summary>
+        /// <remarks>
+        /// Taken from Project.UniqueName - the solution-relative project path - for two reasons.
+        /// Two projects in different solution folders can share a Name, and keying on the name
+        /// merged them into a single node; and the previous key was the EnvDTE.Project COM object
+        /// itself, which relies on DTE handing back the same runtime callable wrapper every time.
+        /// </remarks>
+        public string Key { get; private set; }
 
         public Project _item;
 
         /// <summary>Item in this node.</summary>
         public Project Item
-        { 
+        {
             get => _item;
             private set
             {
                 ThreadHelper.ThrowIfNotOnUIThread();
                 _item = value;
                 ProjectName = _item.Name;
+                Key = KeyOf(_item);
             }
         }
 
-        /// <summary>List of sub items for this node.</summary>
+        /// <summary>Stable identity for a project, falling back if the shell will not answer.</summary>
+        public static string KeyOf(Project project)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+            try
+            {
+                if (!string.IsNullOrEmpty(project.UniqueName)) return project.UniqueName;
+            }
+            catch { /* some project kinds throw rather than answering */ }
+
+            try
+            {
+                if (!string.IsNullOrEmpty(project.FullName)) return project.FullName;
+            }
+            catch { }
+
+            return project.Name;
+        }
+
+        /// <summary>Projects this project references directly.</summary>
         private HashSet<ProjectReferenceTree> _references = new HashSet<ProjectReferenceTree>();
+
+        public HashSet<ProjectReferenceTree> References { get => _references; set => _references = value; }
 
         /// <summary>Depth level for this node</summary>
         public int DepthLevel { get; private set; } = 0;
 
-        /// <summary>Arbitrary additional data.</summary>
-        public object data;
-
-        public HashSet<ProjectReferenceTree> References { get => _references; set => _references = value; }
-
-        /// <summary>Stores parent node that references given node of T.</summary>
-        private Dictionary<Project, ProjectReferenceTree> Proj2ProjRefTreeMap;
+        /// <summary>Shallowest project that references this one, keyed by project.</summary>
+        private Dictionary<string, ProjectReferenceTree> Proj2ProjRefTreeMap;
 
         public HashSet<ProjectReferenceTree> AllPRTs;
+
+        /// <summary>How many projects this one references directly.</summary>
+        /// <remarks>
+        /// Derived rather than counted during construction. The stored version was set from the
+        /// reference list length, which double-counted a project referenced twice, and was never
+        /// set at all by <see cref="GetProjectReferencesOnly"/> - so that mode reported zero for
+        /// every node.
+        /// </remarks>
+        public int ReferencesCount => _references.Count;
+
+        /// <summary>How many projects in this graph reference this one.</summary>
+        public int ReferencedByCount =>
+            AllPRTs == null ? 0 : AllPRTs.Count(p => p != this && p.References.Contains(this));
 
         public static ProjectReferenceTree GetProjectReferenceTree(Project project)
         {
             return new ProjectReferenceTree(project);
         }
 
-        public int ReferencesCount      { get; private set; }
-        public int ReferencedByCount    { get; private set; }
-
+        /// <summary>The selected project and its direct references only - a two level graph.</summary>
         public static ProjectReferenceTree GetProjectReferencesOnly(Project project)
         {
-            //Console.Out.WriteLine("[GetProjectReferencesOnly] item.Name = {0}", project.Name);
-            var ret = new ProjectReferenceTree 
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var ret = new ProjectReferenceTree
             {
                 Item                = project,
                 DepthLevel          = 0,
-                Proj2ProjRefTreeMap = new Dictionary<Project, ProjectReferenceTree>(),
+                Proj2ProjRefTreeMap = new Dictionary<string, ProjectReferenceTree>(),
                 AllPRTs             = new HashSet<ProjectReferenceTree>()
             };
 
             ret.AllPRTs.Add(ret);
-            var references = project.ProjectReferences();
-            foreach (var projRef in references)
+
+            foreach (var projRef in project.ProjectReferences())
             {
-                ret.Proj2ProjRefTreeMap.Add(projRef, ret);
+                string key = KeyOf(projRef);
+
+                // A project can appear twice in the reference list; keep the first node for it.
+                if (ret.Proj2ProjRefTreeMap.TryGetValue(key, out var existing))
+                {
+                    ret._references.Add(existing);
+                    continue;
+                }
+
                 var projRefPRT = new ProjectReferenceTree
                 {
                     Item                = projRef,
@@ -77,9 +127,12 @@ namespace DependencyGraph.Scan
                     Proj2ProjRefTreeMap = ret.Proj2ProjRefTreeMap,
                     AllPRTs             = ret.AllPRTs
                 };
-                projRefPRT.AllPRTs.Add(projRefPRT);
+
+                ret.Proj2ProjRefTreeMap.Add(key, ret);
+                ret.AllPRTs.Add(projRefPRT);
                 ret._references.Add(projRefPRT);
             }
+
             return ret;
         }
 
@@ -87,24 +140,23 @@ namespace DependencyGraph.Scan
 
         public ProjectReferenceTree(Project project, ProjectReferenceTree projectReferenceTree = null, int depthLevel = 0)
         {
-            //Console.Out.WriteLine("[ProjectReferenceTree] item.Name = {0}, depth = {1}", project.Name, depthLevel);
             this.Item       = project;
             this.DepthLevel = depthLevel;
+
             if (projectReferenceTree == null)
             {
-                Proj2ProjRefTreeMap = new Dictionary<Project, ProjectReferenceTree>();
+                Proj2ProjRefTreeMap = new Dictionary<string, ProjectReferenceTree>();
                 AllPRTs = new HashSet<ProjectReferenceTree>();
             }
             else
             {
                 this.Proj2ProjRefTreeMap = projectReferenceTree.Proj2ProjRefTreeMap;
                 this.AllPRTs = projectReferenceTree.AllPRTs;
-                this.ReferencedByCount += 1;
             }
+
             AllPRTs.Add(this);
-            var references = project.ProjectReferences();
-            this.ReferencesCount = references.Count;
-            foreach (var refProj in references)
+
+            foreach (var refProj in project.ProjectReferences())
             {
                 AddProject(refProj);
             }
@@ -112,122 +164,84 @@ namespace DependencyGraph.Scan
 
         public void AddProject(Project item)
         {
-            if (Proj2ProjRefTreeMap.ContainsKey(item))
+            ThreadHelper.ThrowIfNotOnUIThread();
+            string key = KeyOf(item);
+
+            if (Proj2ProjRefTreeMap.TryGetValue(key, out var parentRefTree))
             {
-                // Parent of refTree containing the item
-                var parentRefTree = Proj2ProjRefTreeMap[item];
+                // The node already exists somewhere in the graph - reference it rather than
+                // building a second copy.
+                ProjectReferenceTree refTree = parentRefTree.GetPRTFromReferences(key);
+                if (refTree == null) return;
 
-                // RefTree containing the item
-                ProjectReferenceTree refTree = parentRefTree.GetPRTFromReferences(item);
-                refTree.ReferencedByCount += 1;
-
-                Debug.Assert(refTree != null, "Value suppose to contain item");
                 References.Add(refTree);
 
-                // Do steal parent if it is deeper in tree.
+                // Only take ownership if this node is closer to the root, so the map always
+                // names the shallowest project that references it.
                 if (parentRefTree.DepthLevel > DepthLevel) return;
 
                 refTree.SetLevel(DepthLevel + 1);
-                Proj2ProjRefTreeMap[item] = this;
+                Proj2ProjRefTreeMap[key] = this;
                 return;
             }
 
-            Proj2ProjRefTreeMap.Add(item, this);
+            Proj2ProjRefTreeMap.Add(key, this);
             _references.Add(new ProjectReferenceTree(item, this, DepthLevel + 1));
-        }
-
-        private void AddProjects(IEnumerable<Project> projects)
-        {
-            foreach (var project in projects) AddProject(project);
         }
 
         private void SetLevel(int depthLevel)
         {
+            SetLevel(depthLevel, new HashSet<ProjectReferenceTree>());
+        }
+
+        /// <summary>
+        /// Pushes this node - and the nodes it owns - down to a new depth.
+        /// </summary>
+        /// <remarks>
+        /// The visited set is what stops the recursion. Visual Studio refuses to create circular
+        /// project references, so a cycle should not reach us, but nothing here would survive one:
+        /// without the guard two projects referencing each other recurse until the stack runs out.
+        /// </remarks>
+        private void SetLevel(int depthLevel, HashSet<ProjectReferenceTree> visited)
+        {
+            if (!visited.Add(this)) return;
+
             this.DepthLevel = depthLevel;
+
             foreach (var s in References)
             {
-                var pr = Proj2ProjRefTreeMap[s.Item];
-                if (pr != this || pr.DepthLevel > depthLevel) continue;
-                Proj2ProjRefTreeMap[s.Item] = this;
-                s.SetLevel(depthLevel + 1);
-            }
-        }
+                if (!Proj2ProjRefTreeMap.TryGetValue(s.Key, out var owner)) continue;
+                if (owner != this || owner.DepthLevel > depthLevel) continue;
 
-        public void PrintReferenceTree(string depth = "")
-        {
-            ThreadHelper.ThrowIfNotOnUIThread();
-            Console.Out.WriteLine("{0}{1}", depth, Item.Name);
-            foreach (var subRefTree in this.References)
-            {
-                subRefTree.PrintReferenceTree(depth + "----");
+                Proj2ProjRefTreeMap[s.Key] = this;
+                s.SetLevel(depthLevel + 1, visited);
             }
-        }
-
-        public void PrintReferenceMap(string depth = "")
-        {
-            foreach (var parent in this.AllPRTs)
-            {
-                Console.WriteLine("{0}", parent.ProjectName);
-                foreach (var child in parent.References)
-                {
-                    Console.WriteLine("  -- {0}", child.ProjectName);
-                }
-            }
-        }
-
-        public void PrintGraphVizDot()
-        {
-            Console.WriteLine("digraph {");
-            foreach (var parent in this.AllPRTs)
-            {
-                //Console.WriteLine("    {0} -- ", parent.Item.Name);
-                foreach (var child in parent.References)
-                {
-                    Console.WriteLine("    {0} -> {1}", parent.ProjectName, child.ProjectName);
-                }
-            }
-            Console.WriteLine("}");
         }
 
         #region Utils
-        /// <summary>Returns only direct sub nodes that are on specified level.</summary>
-        /// <param name="d">Depth level - negative value will retrun subs on level next to this node level.</param>
-        public List<ProjectReferenceTree> SubsOnLevel(int d = -1)
-        {
-            if (d < 0) d = this.DepthLevel + 1;
-            var ls = new List<ProjectReferenceTree>();
-            foreach (var s in References) if (s.DepthLevel == d) ls.Add(s);
-            return ls;
-        }
 
-        public List<ProjectReferenceTree> AllOnLevel(int d = -1)
-        {
-            if (d < 0) d = this.DepthLevel + 1;
-            var ret = new List<ProjectReferenceTree>();
-            foreach (var prt in AllPRTs) if (prt.DepthLevel == d) ret.Add(prt);
-            if (ret.Count == 0) return null;
-            return ret;
-        }
-
+        /// <summary>
+        /// The shallowest project that references this one, or null for the root. This is the
+        /// single edge drawn per node in "deepest references only" mode.
+        /// </summary>
         public ProjectReferenceTree GetDeepestReference()
         {
-            if (!Proj2ProjRefTreeMap.ContainsKey(Item)) return null;
-            return Proj2ProjRefTreeMap[Item];
+            return Proj2ProjRefTreeMap.TryGetValue(Key, out var parent) ? parent : null;
         }
 
-        public ProjectReferenceTree GetPRTFromReferences(Project project)
+        public ProjectReferenceTree GetPRTFromReferences(string key)
         {
             foreach (var sr in References)
-                if (sr.Item.Equals(project)) return sr;
+                if (sr.Key == key) return sr;
             return null;
         }
 
-        /// <summary>Perform action on each node in the tree</summary>
-        /// <param name="action"></param>
+        /// <summary>Perform action on each node in the graph.</summary>
         public void WithEach(Action<ProjectReferenceTree> action)
         {
             foreach (var projectReferenceTree in AllPRTs) action(projectReferenceTree);
         }
+
         #endregion
 
         public override string ToString()

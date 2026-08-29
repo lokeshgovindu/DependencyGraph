@@ -58,15 +58,22 @@ namespace DependencyGraph.UI
         /// <summary>Whether the current graph has already been framed to the window.</summary>
         private bool _hasBeenFitted;
 
+        private System.Windows.Media.Brush _statLabelBrush;
+        private System.Windows.Media.Brush _statValueBrush;
+
         public DependencyGraphControl()
         {
             InitializeComponent();
 
             _palette = GraphPalette.ForVsTheme();
-            GraphHost.Background = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(
-                    _palette.Background.R, _palette.Background.G, _palette.Background.B));
-            ApplyThemeToLabels();
+            ApplyTheme();
+
+            // Repaint if the user switches VS theme while the window is open. Without this the
+            // colours stay as they were when the window was created, which can leave dark text
+            // on a light background or the reverse.
+            Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged += OnVsThemeChanged;
+            Unloaded += (s, e) =>
+                Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged -= OnVsThemeChanged;
 
             _viewer.LayoutEditingEnabled = false;
             _viewer.RunLayoutAsync = false;
@@ -97,66 +104,75 @@ namespace DependencyGraph.UI
         #region Setup
 
         /// <summary>
-        /// Colours the toolbar and status bar text to suit the active theme.
+        /// Colours the command bar, graph host and status bar to suit the active theme.
         /// </summary>
         /// <remarks>
-        /// Taken from the graph palette rather than a shell colour key. Two earlier attempts
-        /// failed: the XAML's DynamicResource lookup of the shell brush silently found nothing
-        /// (those keys are not in this element's resource tree), and VSColorTheme.GetThemedColor
-        /// returns a colour whose alpha is zero, so building a brush from it painted the text
-        /// fully transparent. The palette already knows whether the theme is light or dark and its
-        /// text colour is opaque by construction.
+        /// Colours come from the graph palette rather than a shell colour key. Two other routes
+        /// were tried and do not work here: a DynamicResource lookup of the shell's brush keys
+        /// silently finds nothing, because those keys are not in this element's resource tree;
+        /// and VSColorTheme.GetThemedColor returns a colour whose alpha is zero, so a brush built
+        /// from it paints the text fully transparent. The palette already knows whether the theme
+        /// is light or dark, and its colours are opaque by construction.
         /// </remarks>
-        private void ApplyThemeToLabels()
+        private void ApplyTheme()
         {
             var text = _palette.NodeText;
-            var brush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(text.R, text.G, text.B));
+            var brush = Brush(text);
 
-            // ToolBar and StatusBar default to WPF's light system chrome no matter what the
-            // shell theme is, so the containers have to be painted too - otherwise light text
-            // lands on a light strip and disappears.
-            var back = _palette.Background;
-            var backBrush = new System.Windows.Media.SolidColorBrush(
-                System.Windows.Media.Color.FromRgb(back.R, back.G, back.B));
+            var backBrush = Brush(_palette.Background);
+            var lineBrush = Brush(_palette.NodeStroke);
 
-            Tray.Background           = backBrush;
-            MainToolBar.Background    = backBrush;
+            _statLabelBrush = Brush(_palette.StatLabel);
+            _statValueBrush = Brush(_palette.StatValue);
+
+            CommandBar.Background    = backBrush;
+            CommandBar.BorderBrush   = lineBrush;
+            BarSeparator.Background  = lineBrush;
+            GraphHost.Background     = backBrush;
             StatusBarMain.Background  = backBrush;
-            StatusBarMain.Foreground  = brush;
+            StatusBarMain.BorderBrush = lineBrush;
 
-            Lbl_Project.Foreground   = brush;
-            Lbl_Show.Foreground      = brush;
-            Lbl_Direction.Foreground = brush;
+            // Foreground is an inherited TextElement property, so setting it on the two
+            // containers reaches every TextBlock inside them.
+            System.Windows.Documents.TextElement.SetForeground(CommandBar, brush);
+            System.Windows.Documents.TextElement.SetForeground(StatusBarMain, brush);
+            EmptyMessage.Foreground = brush;
 
-            // ToolBar restyles its buttons too, which left these looking greyed out.
+            // Buttons and combo boxes each bring their own template with its own brushes, so
+            // inheritance does not reach them.
             foreach (var button in new[] { Btn_ZoomFit, Btn_Refresh, Btn_SaveAs, Btn_SaveSolutionDGML })
             {
                 button.Foreground = brush;
                 button.Background = backBrush;
+                button.BorderBrush = lineBrush;
             }
 
-            foreach (var combo in new[] { CBProjectNames, CBDisplayMethod, CBOrientation })
-            {
-                combo.Foreground = brush;
-                combo.Background = backBrush;
+            // The combo boxes are deliberately left with WPF's own chrome - light field, dark
+            // text - which is readable under either VS theme. Recolouring them is not worth it:
+            // the selected item is drawn by a TextBlock that ComboBox's ControlTemplate creates,
+            // and implicit styles do not reach elements generated inside a template, so setting
+            // a dark background left the text dark-on-dark and invisible.
+        }
 
-                // A string item is rendered by a TextBlock the ContentPresenter creates, and that
-                // does not inherit the ComboBox's Foreground through ToolBar's template - which
-                // left the selected text almost invisible. An implicit style reaches both the
-                // closed combo and its drop-down list.
-                var itemText = new System.Windows.Style(typeof(TextBlock));
-                itemText.Setters.Add(new System.Windows.Setter(TextBlock.ForegroundProperty, brush));
-                combo.Resources[typeof(TextBlock)] = itemText;
-            }
+        /// <summary>
+        /// Re-picks the palette and rebuilds after a VS theme change.
+        /// </summary>
+        /// <remarks>
+        /// The node and edge colours are baked into the MSAGL graph when it is built, so a full
+        /// rebuild is the only way to recolour them consistently. Theme switching is rare enough
+        /// that losing the current pan and zoom is a fair trade for not being left unreadable.
+        /// </remarks>
+        private void OnVsThemeChanged(Microsoft.VisualStudio.PlatformUI.ThemeChangedEventArgs e)
+        {
+            _palette = GraphPalette.ForVsTheme();
+            ApplyTheme();
+            Rebuild();
+        }
 
-            SB_ProjectName.Foreground   = brush;
-            SB_Nodes.Foreground         = brush;
-            SB_Connections.Foreground   = brush;
-            SB_Selection.Foreground     = brush;
-            SB_Zoom.Foreground          = brush;
-            SB_ProjectsCount.Foreground = brush;
-            EmptyMessage.Foreground     = brush;
+        private static System.Windows.Media.SolidColorBrush Brush(Microsoft.Msagl.Drawing.Color c)
+        {
+            return new System.Windows.Media.SolidColorBrush(
+                System.Windows.Media.Color.FromRgb(c.R, c.G, c.B));
         }
 
         private void PopulateFixedControls()
@@ -323,8 +339,9 @@ namespace DependencyGraph.UI
             EmptyMessage.Text = message;
             EmptyMessage.Visibility = Visibility.Visible;
             GraphHost.Visibility = Visibility.Collapsed;
-            SB_ProjectName.Text = SB_Nodes.Text = SB_Connections.Text = string.Empty;
-            SB_Selection.Text = SB_ProjectsCount.Text = string.Empty;
+            foreach (var field in new[] { SB_ProjectName, SB_Nodes, SB_Connections,
+                                         SB_Zoom, SB_Selection, SB_ProjectsCount })
+                field.Inlines.Clear();
         }
 
         private void HideEmptyMessage()
@@ -392,12 +409,30 @@ namespace DependencyGraph.UI
 
         private void UpdateStatusBar(string projectName)
         {
-            SB_ProjectName.Text   = $"Project: {projectName}";
-            SB_Nodes.Text         = $"Nodes: {_graph.NodeCount}";
-            SB_Connections.Text   = $"Connections: {_graph.EdgeCount}";
-            SB_ProjectsCount.Text = $"Projects in solution: {_vsScanner.Projects.Count}";
-            SB_Selection.Text     = string.Empty;
+            SetStat(SB_ProjectName,   "Project",              projectName);
+            SetStat(SB_Nodes,         "Nodes",                _graph.NodeCount.ToString());
+            SetStat(SB_Connections,   "Connections",          _graph.EdgeCount.ToString());
+            SetStat(SB_ProjectsCount, "Projects in solution", _vsScanner.Projects.Count.ToString());
+            SB_Selection.Inlines.Clear();
             UpdateZoomIndicator();
+        }
+
+        /// <summary>
+        /// Writes one "Name: value" status field, with the name bold and muted and the value in
+        /// the accent colour, so the values are what the eye lands on.
+        /// </summary>
+        private void SetStat(TextBlock target, string name, string value)
+        {
+            target.Inlines.Clear();
+            target.Inlines.Add(new System.Windows.Documents.Run(name + ": ")
+            {
+                FontWeight = FontWeights.SemiBold,
+                Foreground = _statLabelBrush,
+            });
+            target.Inlines.Add(new System.Windows.Documents.Run(value)
+            {
+                Foreground = _statValueBrush,
+            });
         }
 
         /// <summary>
@@ -405,17 +440,17 @@ namespace DependencyGraph.UI
         /// </summary>
         private void UpdateZoomIndicator()
         {
-            if (_graph == null) { SB_Zoom.Text = string.Empty; return; }
+            if (_graph == null) { SB_Zoom.Inlines.Clear(); return; }
 
             try
             {
                 // CurrentScale reads the canvas's render transform, which is not there before
                 // the first graph has been laid out.
-                SB_Zoom.Text = $"Zoom: {_viewer.CurrentScale * 100:0}%";
+                SetStat(SB_Zoom, "Zoom", $"{_viewer.CurrentScale * 100:0}%");
             }
             catch
             {
-                SB_Zoom.Text = string.Empty;
+                SB_Zoom.Inlines.Clear();
             }
         }
 
@@ -449,7 +484,7 @@ namespace DependencyGraph.UI
 
             if (node == null)
             {
-                SB_Selection.Text = string.Empty;
+                SB_Selection.Inlines.Clear();
                 return;
             }
 
@@ -458,10 +493,10 @@ namespace DependencyGraph.UI
             Invalidate(node);
 
             var project = GraphBuilder.ProjectOf(node);
-            SB_Selection.Text = project == null
-                ? $"Selected: {node.LabelText}"
-                : $"Selected: {project.ProjectName}  (references {project.ReferencesCount}, " +
-                  $"referenced by {project.ReferencedByCount})";
+            SetStat(SB_Selection, "Selected", project == null
+                ? node.LabelText
+                : $"{project.ProjectName}  (references {project.ReferencesCount}, " +
+                  $"referenced by {project.ReferencedByCount})");
         }
 
         /// <summary>
@@ -509,7 +544,7 @@ namespace DependencyGraph.UI
         {
             if (project == null || _graph == null) return;
 
-            var node = _graph.FindNode(project.ProjectName);
+            var node = _graph.FindNode(project.Key);
             if (node == null) return;
 
             node.Attr.FillColor = fill;

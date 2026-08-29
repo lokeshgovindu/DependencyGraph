@@ -23,10 +23,13 @@ namespace DependencyGraph.Scan
             // Create a new Graph object
             Graph graph = new Graph();
 
+            // Keyed by the project's stable key, not its name: two projects in different
+            // solution folders can share a name, and keying on the name merged them into one
+            // node. The name is only the label.
             foreach (var refPRT in prt.AllPRTs)
             {
-                name2nodesMap[refPRT.ProjectName] = graph.Nodes.GetOrCreate(refPRT.ProjectName);
-                name2nodesMap[refPRT.ProjectName].Label = refPRT.ProjectName;
+                name2nodesMap[refPRT.Key] = graph.Nodes.GetOrCreate(refPRT.Key);
+                name2nodesMap[refPRT.Key].Label = refPRT.ProjectName;
             }
 
             // Create a link between the nodes
@@ -34,7 +37,7 @@ namespace DependencyGraph.Scan
             {
                 foreach (var refProj in refPRT.References)
                 {
-                    var link = graph.Links.GetOrCreate(name2nodesMap[refPRT.ProjectName], name2nodesMap[refProj.ProjectName]);
+                    var link = graph.Links.GetOrCreate(name2nodesMap[refPRT.Key], name2nodesMap[refProj.Key]);
                 }
             }
 
@@ -50,18 +53,18 @@ namespace DependencyGraph.Scan
             {
                 // Create GraphViz's dot digraph
                 writer.WriteLine("digraph {");
-                foreach (var item in prt.AllPRTs)
-                {
-                    // An isolated project still deserves a node of its own.
-                    if (item.References.Count == 0)
-                        writer.WriteLine("    {0}", DotId(item.ProjectName));
 
+                // Declare every node by its stable key with the project name as the label, so
+                // two projects that share a name stay separate and isolated projects still
+                // appear at all.
+                foreach (var item in prt.AllPRTs)
+                    writer.WriteLine("    {0} [label={1}]",
+                        DotId(item.Key), DotId(item.ProjectName));
+
+                foreach (var item in prt.AllPRTs)
                     foreach (var subItem in item.References)
-                    {
-                        writer.WriteLine("    {0} -> {1}",
-                            DotId(item.ProjectName), DotId(subItem.ProjectName));
-                    }
-                }
+                        writer.WriteLine("    {0} -> {1}", DotId(item.Key), DotId(subItem.Key));
+
                 writer.WriteLine("}");
             }
             return true;
@@ -176,18 +179,33 @@ namespace DependencyGraph.Scan
             // Create a new Graph object
             Graph graph = new Graph();
 
+            // Keyed by stable key rather than name, so same-named projects in different solution
+            // folders stay separate.
             foreach (var proj in AllProjects)
             {
-                name2nodesMap[proj.Name] = graph.Nodes.GetOrCreate(proj.Name);
-                name2nodesMap[proj.Name].Label = proj.Name;
+                string key = ProjectReferenceTree.KeyOf(proj);
+                name2nodesMap[key] = graph.Nodes.GetOrCreate(key);
+                name2nodesMap[key].Label = proj.Name;
             }
 
             // Create a link between the nodes
             foreach (var item in AllProjects)
             {
+                var from = name2nodesMap[ProjectReferenceTree.KeyOf(item)];
                 foreach (var refProj in item.ProjectReferences())
                 {
-                    var link = graph.Links.GetOrCreate(name2nodesMap[item.Name], name2nodesMap[refProj.Name]);
+                    // A referenced project need not be one the scan returned - it can live
+                    // outside the solution, or be of a kind we skip - so create it on demand
+                    // instead of indexing into the map and throwing.
+                    string refKey = ProjectReferenceTree.KeyOf(refProj);
+                    if (!name2nodesMap.TryGetValue(refKey, out var to))
+                    {
+                        to = graph.Nodes.GetOrCreate(refKey);
+                        to.Label = refProj.Name;
+                        name2nodesMap[refKey] = to;
+                    }
+
+                    var link = graph.Links.GetOrCreate(from, to);
                 }
             }
 

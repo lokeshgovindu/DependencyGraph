@@ -3,29 +3,27 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-             xmlns:vsui="clr-namespace:Microsoft.VisualStudio.PlatformUI;assembly=Microsoft.VisualStudio.Shell.15.0"
              mc:Ignorable="d"
-             d:DesignHeight="600" d:DesignWidth="1000"
-             Background="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowBackgroundBrushKey}}"
-             Foreground="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}">
+             d:DesignHeight="600" d:DesignWidth="1000">
     <!--
-        Themed with the shell's own brushes rather than the Community toolkit's
-        Themes.UseVsTheme: that attached property loads a ResourceDictionary from a pack URI and
-        threw a resource-loading exception inside MergeStyles when the tool window was created,
-        which took the whole control down. DynamicResource degrades to the default brush if a key
-        is ever missing, so it cannot fail the same way.
+        Colours are applied in code (ApplyTheme), not by DynamicResource on the shell's brush
+        keys: those keys are not in this element's resource tree, so the lookup silently finds
+        nothing and the text keeps whatever WPF's default chrome gives it.
     -->
     <UserControl.Resources>
-        <!--
-            ToolBar substitutes its own foreground for its items, which left these labels dark
-            grey on the dark theme's dark background. Setting it explicitly from the shell brush
-            keeps them readable in both themes.
-        -->
-        <Style x:Key="ToolBarLabel" TargetType="TextBlock">
+        <Style x:Key="BarLabel" TargetType="TextBlock">
             <Setter Property="VerticalAlignment" Value="Center"/>
-            <Setter Property="Margin" Value="2,0,4,0"/>
-            <Setter Property="Foreground"
-                    Value="{DynamicResource {x:Static vsui:EnvironmentColors.ToolWindowTextBrushKey}}"/>
+            <Setter Property="Margin" Value="0,0,5,0"/>
+        </Style>
+        <Style x:Key="BarCombo" TargetType="ComboBox">
+            <Setter Property="Height" Value="23"/>
+            <Setter Property="Margin" Value="0,0,12,0"/>
+            <Setter Property="VerticalContentAlignment" Value="Center"/>
+        </Style>
+        <Style x:Key="BarButton" TargetType="Button">
+            <Setter Property="Height" Value="23"/>
+            <Setter Property="Padding" Value="9,0"/>
+            <Setter Property="Margin" Value="0,0,4,0"/>
         </Style>
     </UserControl.Resources>
 
@@ -36,48 +34,63 @@
             <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
-        <ToolBarTray x:Name="Tray" Grid.Row="0" IsLocked="True">
-            <ToolBar x:Name="MainToolBar" ToolBarTray.IsLocked="True">
-                <TextBlock x:Name="Lbl_Project" Text="Project" Style="{StaticResource ToolBarLabel}"/>
-                <ComboBox x:Name="CBProjectNames"
-                          Width="230" Height="22"
-                          IsEditable="True"
-                          IsTextSearchEnabled="True"
-                          StaysOpenOnEdit="True"
-                          ToolTip="Project to show the reference tree for. Type to search."
-                          VerticalContentAlignment="Center"/>
+        <!--
+            Command bar. A plain Grid rather than a ToolBar inside a ToolBarTray: ToolBar draws a
+            drag grip and an overflow chevron from its own control template, so they keep WPF's
+            default look (including a yellow hover highlight) however the rest of the bar is
+            themed, and OverflowMode.Never does not remove the chevron. It also restyles every
+            child it hosts. Laying the bar out directly avoids all of that.
 
-                <Separator/>
+            What to show sits on the left, actions on the right, so the controls you change most
+            stay put as the window is resized.
+        -->
+        <Border x:Name="CommandBar" Grid.Row="0" Padding="8,5" BorderThickness="0,0,0,1">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*" MinWidth="8"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                <TextBlock x:Name="Lbl_Show" Text="Show" Style="{StaticResource ToolBarLabel}"/>
-                <ComboBox x:Name="CBDisplayMethod"
-                          Width="190" Height="22"
-                          ToolTip="Which references to draw as edges."
-                          VerticalContentAlignment="Center"/>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock x:Name="Lbl_Project" Text="Project" Style="{StaticResource BarLabel}"/>
+                    <ComboBox x:Name="CBProjectNames"
+                              Style="{StaticResource BarCombo}"
+                              Width="220"
+                              IsEditable="True"
+                              IsTextSearchEnabled="True"
+                              StaysOpenOnEdit="True"
+                              ToolTip="Project to show the reference tree for. Type to search."/>
 
-                <Separator/>
+                    <TextBlock x:Name="Lbl_Show" Text="Show" Style="{StaticResource BarLabel}"/>
+                    <ComboBox x:Name="CBDisplayMethod"
+                              Style="{StaticResource BarCombo}"
+                              Width="175"
+                              ToolTip="Which references to draw as edges."/>
 
-                <TextBlock x:Name="Lbl_Direction" Text="Direction" Style="{StaticResource ToolBarLabel}"/>
-                <ComboBox x:Name="CBOrientation"
-                          Width="130" Height="22"
-                          ToolTip="Direction the reference depth grows in."
-                          VerticalContentAlignment="Center"/>
+                    <TextBlock x:Name="Lbl_Direction" Text="Direction" Style="{StaticResource BarLabel}"/>
+                    <ComboBox x:Name="CBOrientation"
+                              Style="{StaticResource BarCombo}"
+                              Width="120"
+                              Margin="0"
+                              ToolTip="Direction the reference depth grows in."/>
+                </StackPanel>
 
-                <Separator/>
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                    <Button x:Name="Btn_ZoomFit" Style="{StaticResource BarButton}"
+                            ToolTip="Fit the whole graph in the window.">Fit</Button>
+                    <Button x:Name="Btn_Refresh" Style="{StaticResource BarButton}"
+                            ToolTip="Rescan the solution.">Refresh</Button>
 
-                <Button x:Name="Btn_ZoomFit" Height="22" Padding="6,0"
-                        ToolTip="Fit the whole graph in the window.">Fit</Button>
-                <Button x:Name="Btn_Refresh" Height="22" Padding="6,0" Margin="3,0,0,0"
-                        ToolTip="Rescan the solution.">Refresh</Button>
+                    <Border x:Name="BarSeparator" Width="1" Margin="5,3" SnapsToDevicePixels="True"/>
 
-                <Separator/>
-
-                <Button x:Name="Btn_SaveAs" Height="22" Padding="6,0"
-                        ToolTip="Save this project's graph as PNG, DGML or Graphviz.">Save As...</Button>
-                <Button x:Name="Btn_SaveSolutionDGML" Height="22" Padding="6,0" Margin="3,0,0,0"
-                        ToolTip="Save the whole solution's graph as DGML or Graphviz.">Save Solution Graph...</Button>
-            </ToolBar>
-        </ToolBarTray>
+                    <Button x:Name="Btn_SaveAs" Style="{StaticResource BarButton}"
+                            ToolTip="Save this project's graph as PNG, DGML or Graphviz.">Save As...</Button>
+                    <Button x:Name="Btn_SaveSolutionDGML" Style="{StaticResource BarButton}" Margin="0"
+                            ToolTip="Save the whole solution's graph as DGML or Graphviz.">Save Solution Graph...</Button>
+                </StackPanel>
+            </Grid>
+        </Border>
 
         <!-- GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border. -->
         <Grid x:Name="GraphHost" Grid.Row="1" ClipToBounds="True"/>
@@ -89,29 +102,22 @@
                    TextAlignment="Center" TextWrapping="Wrap"
                    MaxWidth="420" Opacity="0.75"/>
 
-        <StatusBar x:Name="StatusBarMain" Grid.Row="2">
-            <StatusBarItem>
-                <TextBlock x:Name="SB_ProjectName" Text=""/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="SB_Nodes" Text=""/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="SB_Connections" Text=""/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="SB_Zoom" Text=""/>
-            </StatusBarItem>
-            <Separator/>
-            <StatusBarItem>
-                <TextBlock x:Name="SB_Selection" Text=""/>
-            </StatusBarItem>
-            <StatusBarItem DockPanel.Dock="Right" HorizontalAlignment="Right">
-                <TextBlock x:Name="SB_ProjectsCount" Text=""/>
-            </StatusBarItem>
-        </StatusBar>
+        <Border x:Name="StatusBarMain" Grid.Row="2" Padding="8,3" BorderThickness="0,1,0,0">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal">
+                    <TextBlock x:Name="SB_ProjectName" Text="" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="SB_Nodes" Text="" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="SB_Connections" Text="" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="SB_Zoom" Text="" Margin="0,0,14,0"/>
+                    <TextBlock x:Name="SB_Selection" Text=""/>
+                </StackPanel>
+                <TextBlock x:Name="SB_ProjectsCount" Grid.Column="2" Text=""/>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

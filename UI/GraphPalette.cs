@@ -30,6 +30,12 @@ namespace DependencyGraph.UI
         public Color SelectedStroke  { get; private set; }
         public Color SelectedText    { get; private set; }
 
+        /// <summary>Status bar field name - muted, so it reads as a caption.</summary>
+        public Color StatLabel { get; private set; }
+
+        /// <summary>Status bar field value - the accent, so the numbers carry the emphasis.</summary>
+        public Color StatValue { get; private set; }
+
         public bool IsDark { get; private set; }
 
         /// <summary>Builds the palette for the theme Visual Studio is currently using.</summary>
@@ -70,6 +76,8 @@ namespace DependencyGraph.UI
                 ReferencedFill  = Rgb(0xFB, 0xD8, 0xA0),
                 SelectedStroke  = Rgb(0xC0, 0x5A, 0x00),
                 SelectedText    = Rgb(0x1E, 0x1E, 0x1E),
+                StatLabel       = Rgb(0x55, 0x55, 0x55),
+                StatValue       = Rgb(0x0E, 0x63, 0x8B),
             };
         }
 
@@ -90,6 +98,8 @@ namespace DependencyGraph.UI
                 ReferencedFill  = Rgb(0x7A, 0x50, 0x1F),
                 SelectedStroke  = Rgb(0xE8, 0x9B, 0x2E),
                 SelectedText    = Rgb(0xF1, 0xF1, 0xF1),
+                StatLabel       = Rgb(0x9A, 0x9A, 0x9A),
+                StatValue       = Rgb(0x4E, 0xC9, 0xB0),
             };
         }
 
