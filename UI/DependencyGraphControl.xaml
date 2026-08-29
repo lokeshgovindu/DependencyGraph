@@ -94,7 +94,9 @@
                     <Button x:Name="Btn_ZoomFit" Style="{StaticResource BarButton}"
                             ToolTip="Zoom so the whole graph fits the window.&#10;It opens at 100% instead, which keeps the labels crisp.">Fit</Button>
                     <Button x:Name="Btn_Refresh" Style="{StaticResource BarButton}"
-                            ToolTip="Rescan the solution.&#10;Adding or removing a project is picked up on its own; use this after editing&#10;a project's references outside the IDE.">Refresh</Button>
+                            ToolTip="Re-read the solution: which projects it has, and what each one references.&#10;&#10;Adding or removing a project is picked up on its own, but changing a project's&#10;references is not - so use this after an Add Reference, or after editing a&#10;project file by hand.&#10;&#10;This is about the data, not the picture: anything you have dragged stays where&#10;you put it. Reset layout is what puts that back.">Refresh</Button>
+                    <Button x:Name="Btn_ResetLayout" Style="{StaticResource BarButton}"
+                            ToolTip="Throw away every node you have dragged and lay the graph out again.&#10;&#10;Dragged positions are otherwise kept - through a rebuild, through Refresh, and&#10;from one session to the next - so this is the way back to the automatic layout.&#10;&#10;Only affects where things are drawn; it does not re-read the solution.">Reset layout</Button>
 
                     <ToggleButton x:Name="Btn_Focus" Height="23" Padding="9,0" Margin="0,0,4,0"
                                   ToolTip="Narrow the graph to the projects you have picked.&#10;&#10;Ctrl+click two or more nodes, then switch this on: everything else is dropped&#10;and you are left with just those projects and the references between them.&#10;For getting a readable answer out of a solution with hundreds of projects.&#10;&#10;Only references directly between the projects you picked are drawn. If one&#10;reaches another through a project you did not pick, there is no arrow.&#10;&#10;Switch off to get the whole graph back.">Focus</ToggleButton>

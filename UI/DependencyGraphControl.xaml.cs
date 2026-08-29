@@ -107,6 +107,7 @@ namespace DependencyGraph.UI
 
             Btn_ZoomFit.Click           += (s, e) => { _viewer.SetInitialTransform(); UpdateZoomIndicator(); };
             Btn_Refresh.Click           += (s, e) => Rescan();
+            Btn_ResetLayout.Click       += (s, e) => ResetPositions();
             Btn_Focus.Checked           += (s, e) => ApplyFocus();
             Btn_Focus.Unchecked         += (s, e) => { _focusKeys.Clear(); Rebuild(); };
             Btn_Group.Checked           += (s, e) => Rebuild();
@@ -174,7 +175,8 @@ namespace DependencyGraph.UI
             // Buttons and combo boxes each bring their own template with its own brushes, so
             // inheritance does not reach them.
             foreach (var button in new System.Windows.Controls.Primitives.ButtonBase[]
-                     { Btn_ZoomFit, Btn_Refresh, Btn_SaveAs, Btn_SaveSolutionDGML, Btn_Group, Btn_Focus })
+                     { Btn_ZoomFit, Btn_Refresh, Btn_ResetLayout, Btn_SaveAs, Btn_SaveSolutionDGML,
+                       Btn_Group, Btn_Focus })
             {
                 button.Foreground = brush;
                 button.Background = backBrush;
@@ -1089,13 +1091,21 @@ namespace DependencyGraph.UI
             return null;
         }
 
-        /// <summary>Puts everything back where the layout wants it.</summary>
+        /// <summary>
+        /// Puts everything back where the layout wants it.
+        /// </summary>
+        /// <remarks>
+        /// Rebuilds even with nothing dragged, rather than returning early. Pressing a button and
+        /// having it do nothing at all reads as broken, and re-running the layout is exactly what
+        /// the button says it does.
+        /// </remarks>
         private void ResetPositions()
         {
-            if (_dragOffsets.Count == 0) return;
+            bool had = _dragOffsets.Count > 0;
 
             _dragOffsets.Clear();
-            SaveStoredPositions();
+            if (had) SaveStoredPositions();
+
             Rebuild();
         }
 

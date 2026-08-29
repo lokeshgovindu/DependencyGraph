@@ -96,7 +96,8 @@ Solution Explorer and press **Refresh** to rescan.
 | **Direction** | `Top to bottom`, `Left to right`, `Bottom to top` or `Right to left`. |
 | **Depth** | `All`, or 1–6 levels. Limit this on a large solution. |
 | **Fit** | Zoom so the whole graph fits the window. |
-| **Refresh** | Rescan the solution — after adding a project or changing references. |
+| **Refresh** | Re-read the solution: its projects and what each one references. About the data, not the picture — anything you dragged stays put. |
+| **Reset layout** | Discard the nodes you have dragged and lay the graph out again. About the picture, not the data. |
 | **Focus** | Draw only the selected projects and the references between them. Ctrl+click nodes to select several. |
 | **Group** | Draw a box around each solution folder, named after it. Click the chevron on a box to fold that folder down to one shape. |
 | **Legend** | Show what the colours mean. |
@@ -137,7 +138,7 @@ project that was left out.
 | Drag the background | Pan |
 | Drag a node | Move it. Its references follow it, and nothing else shifts. |
 | Drag a folder box | Move the whole group - the box, the projects in it and their references. |
-| Right-click the background | **Reset dragged positions** - put everything back where the layout wants it. |
+| **Reset layout** | Put everything back where the layout wants it. Also on the background right-click. |
 | Mouse wheel | Zoom |
 | **Fit** | Fit the graph to the window |
 | Hover a node | A tooltip with its solution folder, reference counts and path |
@@ -227,7 +228,11 @@ survives a rebuild - changing view, direction or depth, pressing **Refresh**, co
 folder. An offset rather than a fixed coordinate on purpose: every rebuild is a fresh layout, and
 a coordinate from the previous one would put the node somewhere arbitrary in the new one.
 
-Right-click the background for **Reset dragged positions** to put everything back.
+**Reset layout** on the command bar puts everything back, and so does **Reset dragged positions**
+on the background right-click.
+
+Note that **Refresh** does not: it re-reads the solution, not the picture, and deliberately keeps
+what you have moved.
 
 Offsets are written to `%LOCALAPPDATA%\DependencyGraph\positions`, one small file per solution,
 so an arrangement survives closing the solution and closing Visual Studio. Nothing is written

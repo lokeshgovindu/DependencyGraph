@@ -67,7 +67,7 @@ left.
 Automatic layout is a starting point. Drag a node, or a whole folder box, to where the graph
 reads better - its references follow it and nothing else moves. What you dragged is remembered
 across rebuilds, so changing view, direction or depth does not throw your arrangement away.
-Right-click the background to put everything back.
+**Reset layout** puts everything back.
 
 ## Circular references
 
