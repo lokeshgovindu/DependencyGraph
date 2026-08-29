@@ -30,6 +30,9 @@ namespace DependencyGraph.UI
         public Color SelectedStroke  { get; private set; }
         public Color SelectedText    { get; private set; }
 
+        /// <summary>Reference that closes a cycle - an error, so it uses the error colour.</summary>
+        public Color CycleEdge { get; private set; }
+
         /// <summary>Status bar field name - muted, so it reads as a caption.</summary>
         public Color StatLabel { get; private set; }
 
@@ -78,6 +81,7 @@ namespace DependencyGraph.UI
                 SelectedText    = Rgb(0x1E, 0x1E, 0x1E),
                 StatLabel       = Rgb(0x55, 0x55, 0x55),
                 StatValue       = Rgb(0x0E, 0x63, 0x8B),
+                CycleEdge       = Rgb(0xC0, 0x28, 0x28),
             };
         }
 
@@ -100,6 +104,7 @@ namespace DependencyGraph.UI
                 SelectedText    = Rgb(0xF1, 0xF1, 0xF1),
                 StatLabel       = Rgb(0x9A, 0x9A, 0x9A),
                 StatValue       = Rgb(0x4E, 0xC9, 0xB0),
+                CycleEdge       = Rgb(0xF4, 0x5B, 0x5B),
             };
         }
 

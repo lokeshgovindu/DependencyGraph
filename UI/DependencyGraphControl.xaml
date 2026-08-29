@@ -72,8 +72,14 @@
                     <ComboBox x:Name="CBOrientation"
                               Style="{StaticResource BarCombo}"
                               Width="120"
-                              Margin="0"
                               ToolTip="Direction the reference depth grows in."/>
+
+                    <TextBlock x:Name="Lbl_Depth" Text="Depth" Style="{StaticResource BarLabel}"/>
+                    <ComboBox x:Name="CBDepth"
+                              Style="{StaticResource BarCombo}"
+                              Width="70"
+                              Margin="0"
+                              ToolTip="How many levels of references to draw. Limit this on a large solution."/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">

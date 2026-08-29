@@ -93,6 +93,7 @@ namespace DependencyGraph.UI
             CBProjectNames.SelectionChanged  += (s, e) => Rebuild();
             CBDisplayMethod.SelectionChanged += (s, e) => Rebuild();
             CBOrientation.SelectionChanged   += (s, e) => Rebuild();
+            CBDepth.SelectionChanged         += (s, e) => Rebuild();
 
             PreviewKeyUp += (s, e) =>
             {
@@ -184,6 +185,12 @@ namespace DependencyGraph.UI
 
             foreach (var name in _directions.Keys) CBOrientation.Items.Add(name);
             CBOrientation.SelectedIndex = 0;
+
+            // "All" plus a few concrete cuts. Boxed ints, so SelectedDepth can read them back
+            // without parsing.
+            CBDepth.Items.Add(DepthAll);
+            for (int depth = 1; depth <= 6; ++depth) CBDepth.Items.Add(depth);
+            CBDepth.SelectedIndex = 0;
 
             _loading = false;
         }
@@ -290,46 +297,54 @@ namespace DependencyGraph.UI
             }
 
             _loading = true;
-            string previous = CBProjectNames.SelectedItem as string;
+            string previousKey = SelectedProject?.Key;
+
             CBProjectNames.Items.Clear();
-            foreach (var project in _vsScanner.Projects)
-            {
-                ThreadHelper.ThrowIfNotOnUIThread();
-                CBProjectNames.Items.Add(project.Name);
-            }
+            var choices = _vsScanner.Projects.Select(p => new ProjectChoice(p)).ToList();
+
+            // Only spell out the path for names that are ambiguous, so the list stays readable.
+            foreach (var group in choices.GroupBy(c => c.Name))
+                if (group.Count() > 1)
+                    foreach (var choice in group) choice.ShowKey = true;
+
+            foreach (var choice in choices.OrderBy(c => c.Name)) CBProjectNames.Items.Add(choice);
             _loading = false;
 
             HideEmptyMessage();
-            SelectInitialProject(previous);
+            SelectInitialProject(previousKey);
         }
 
-        private void SelectInitialProject(string previous)
+        /// <summary>The picked project, or null while the picker is still being populated.</summary>
+        private ProjectChoice SelectedProject => CBProjectNames.SelectedItem as ProjectChoice;
+
+        private IEnumerable<ProjectChoice> Choices => CBProjectNames.Items.OfType<ProjectChoice>();
+
+        private bool TrySelectByKey(string key)
+        {
+            if (key == null) return false;
+
+            var match = Choices.FirstOrDefault(c => c.Key == key);
+            if (match == null) return false;
+
+            CBProjectNames.SelectedItem = match;
+            return true;
+        }
+
+        private void SelectInitialProject(string previousKey)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            if (previous != null && CBProjectNames.Items.Contains(previous))
-            {
-                CBProjectNames.SelectedItem = previous;
-                return;
-            }
+            if (TrySelectByKey(previousKey)) return;
 
             var activeProjects = _dte.ActiveSolutionProjects as Array;
             if (activeProjects != null && activeProjects.Length > 0)
             {
                 var active = activeProjects.GetValue(0) as EnvDTE.Project;
-                if (active != null && CBProjectNames.Items.Contains(active.Name))
-                {
-                    CBProjectNames.SelectedItem = active.Name;
-                    return;
-                }
+                if (active != null && TrySelectByKey(ProjectReferenceTree.KeyOf(active))) return;
             }
 
             if (_vsScanner.StartupProject != null
-                && CBProjectNames.Items.Contains(_vsScanner.StartupProject.Name))
-            {
-                CBProjectNames.SelectedItem = _vsScanner.StartupProject.Name;
-                return;
-            }
+                && TrySelectByKey(ProjectReferenceTree.KeyOf(_vsScanner.StartupProject))) return;
 
             CBProjectNames.SelectedIndex = 0;
         }
@@ -360,21 +375,30 @@ namespace DependencyGraph.UI
         private LayerDirection SelectedDirection
             => _directions[(string)CBOrientation.SelectedItem];
 
+        /// <summary>The "no limit" entry in the depth picker.</summary>
+        private const string DepthAll = "All";
+
+        /// <summary>Depth cut currently chosen, or <see cref="GraphBuilder.UnlimitedDepth"/>.</summary>
+        private int SelectedDepth
+            => CBDepth.SelectedItem is int depth ? depth : GraphBuilder.UnlimitedDepth;
+
         private void Rebuild()
         {
             if (_loading || _vsScanner == null) return;
 
-            string projectName = CBProjectNames.SelectedItem as string;
-            if (projectName == null) return;
+            var choice = SelectedProject;
+            if (choice == null) return;
+            string projectName = choice.Name;
 
             ThreadHelper.ThrowIfNotOnUIThread();
 
             var visibility = SelectedVisibility;
             try
             {
+                // Resolved by key, so a name shared by two projects picks the right one.
                 _prt = visibility == ConnectionsVisibility.Project
-                    ? _vsScanner.GetProjectReferencesOnly(projectName)
-                    : _vsScanner.GetProjectReferenceTree(projectName);
+                    ? ProjectReferenceTree.GetProjectReferencesOnly(choice.Project)
+                    : new ProjectReferenceTree(choice.Project);
             }
             catch (Exception ex)
             {
@@ -396,7 +420,7 @@ namespace DependencyGraph.UI
 
             _selected = null;
             _visuals = null;
-            _graph = GraphBuilder.Build(_prt, visibility, SelectedDirection, _palette);
+            _graph = GraphBuilder.Build(_prt, visibility, SelectedDirection, _palette, SelectedDepth);
             _viewer.Graph = _graph;
 
             // Frame the new graph now if the panel is measured, otherwise leave it to
@@ -493,10 +517,19 @@ namespace DependencyGraph.UI
             Invalidate(node);
 
             var project = GraphBuilder.ProjectOf(node);
-            SetStat(SB_Selection, "Selected", project == null
-                ? node.LabelText
-                : $"{project.ProjectName}  (references {project.ReferencesCount}, " +
-                  $"referenced by {project.ReferencedByCount})");
+            if (project == null)
+            {
+                SetStat(SB_Selection, "Selected", node.LabelText);
+                return;
+            }
+
+            // The key is the solution-relative project path, which is worth showing: the graph
+            // only has room for short names, and it is what tells two same-named projects apart.
+            string detail = $"{project.ProjectName}  (references {project.ReferencesCount}, " +
+                            $"referenced by {project.ReferencedByCount})";
+            if (project.Key != project.ProjectName) detail += $"  ·  {project.Key}";
+
+            SetStat(SB_Selection, "Selected", detail);
         }
 
         /// <summary>
@@ -578,9 +611,10 @@ namespace DependencyGraph.UI
         {
             var project = GraphBuilder.ProjectOf(node);
             if (project == null) return;
-            if (!CBProjectNames.Items.Contains(project.ProjectName)) return;
 
-            CBProjectNames.SelectedItem = project.ProjectName;
+            // Matched on the key, so drilling in lands on the right project even when two
+            // share a name.
+            TrySelectByKey(project.Key);
         }
 
         private void BuildNodeContextMenu()
@@ -641,7 +675,7 @@ namespace DependencyGraph.UI
 
             var dialog = new SaveFileDialog
             {
-                FileName = CBProjectNames.SelectedItem + ".png",
+                FileName = (SelectedProject?.Name ?? "References") + ".png",
                 Filter   = filter,
                 Title    = "Save Project Dependency Graph As"
             };
@@ -692,7 +726,7 @@ namespace DependencyGraph.UI
             if (fileName == null)
             {
                 return ImageSaver.AsPNG(_viewer.GraphCanvas, bounds,
-                    CBProjectNames.SelectedItem as string ?? "References");
+                    SelectedProject?.Name ?? "References");
             }
 
             return ImageSaver.AsPNG(_viewer.GraphCanvas, fileName, bounds);

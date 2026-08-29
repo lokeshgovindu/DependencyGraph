@@ -40,8 +40,11 @@ namespace DependencyGraph.UI
         /// <summary>Space between the label and the node border, in points.</summary>
         private const int LabelMargin = 6;
 
+        /// <summary>Value of <c>maxDepth</c> meaning "no limit".</summary>
+        public const int UnlimitedDepth = int.MaxValue;
+
         public static Graph Build(ProjectReferenceTree prt, ConnectionsVisibility visibility,
-            LayerDirection direction, GraphPalette palette)
+            LayerDirection direction, GraphPalette palette, int maxDepth = UnlimitedDepth)
         {
             var graph = new Graph("dependencies");
 
@@ -51,7 +54,14 @@ namespace DependencyGraph.UI
             graph.Attr.LayerSeparation   = 45;
             graph.Attr.OptimizeLabelPositions = true;
 
+            // A deep solution graph is unreadable in one view, so only the requested number of
+            // levels is drawn. DepthLevel is the distance from the root along the shallowest
+            // path, so filtering on it cuts whole levels cleanly.
+            var included = new HashSet<ProjectReferenceTree>();
             foreach (var project in prt.AllPRTs)
+                if (project.DepthLevel <= maxDepth) included.Add(project);
+
+            foreach (var project in included)
             {
                 // Node id is the project's stable key, not its name: two projects in different
                 // solution folders can share a name, and using the name merged them into one
@@ -75,36 +85,93 @@ namespace DependencyGraph.UI
                 node.Label.FontSize  = LabelFontSize;
             }
 
-            AddEdges(graph, prt, visibility, palette);
+            AddEdges(graph, included, visibility, palette);
             return graph;
         }
 
-        private static void AddEdges(Graph graph, ProjectReferenceTree prt,
+        private static void AddEdges(Graph graph, HashSet<ProjectReferenceTree> included,
             ConnectionsVisibility visibility, GraphPalette palette)
         {
+            // A reference is only a cycle if it points back at something already on the path from
+            // the root, so work that out once over the whole set rather than per edge.
+            var backEdges = FindBackEdges(included);
+
             if (visibility == ConnectionsVisibility.All)
             {
-                foreach (var project in prt.AllPRTs)
+                foreach (var project in included)
                     foreach (var reference in project.References)
-                        Style(graph.AddEdge(project.Key, reference.Key), palette);
+                    {
+                        // Skip edges into levels that were cut by the depth limit.
+                        if (!included.Contains(reference)) continue;
+                        Style(graph.AddEdge(project.Key, reference.Key), palette,
+                            backEdges.Contains((project, reference)));
+                    }
 
                 return;
             }
 
             // Deepest, and "project references only" - which is already a two-level tree, so the
             // deepest reference of each of its nodes is the root.
-            foreach (var project in prt.AllPRTs)
+            foreach (var project in included)
             {
                 var referencedBy = project.GetDeepestReference();
                 if (referencedBy == null || referencedBy == project) continue;
-                Style(graph.AddEdge(referencedBy.Key, project.Key), palette);
+                if (!included.Contains(referencedBy)) continue;
+
+                Style(graph.AddEdge(referencedBy.Key, project.Key), palette,
+                    backEdges.Contains((referencedBy, project)));
             }
         }
 
-        private static void Style(Edge edge, GraphPalette palette)
+        /// <summary>
+        /// References that close a cycle, found by depth-first search.
+        /// </summary>
+        /// <remarks>
+        /// Visual Studio will not let you add a circular project reference through the UI, but a
+        /// hand-edited project file can still produce one and the solution will load: it only
+        /// fails at build time, with an error that does not say which projects are involved.
+        /// Drawing those references in the error colour points straight at them.
+        /// </remarks>
+        private static HashSet<(ProjectReferenceTree, ProjectReferenceTree)> FindBackEdges(
+            HashSet<ProjectReferenceTree> included)
         {
-            edge.Attr.Color = palette.Edge;
-            edge.Attr.LineWidth = 1;
+            var backEdges = new HashSet<(ProjectReferenceTree, ProjectReferenceTree)>();
+            var visited = new HashSet<ProjectReferenceTree>();
+            var onPath = new HashSet<ProjectReferenceTree>();
+
+            foreach (var start in included)
+                if (!visited.Contains(start))
+                    Walk(start, included, visited, onPath, backEdges);
+
+            return backEdges;
+        }
+
+        private static void Walk(ProjectReferenceTree node,
+            HashSet<ProjectReferenceTree> included,
+            HashSet<ProjectReferenceTree> visited,
+            HashSet<ProjectReferenceTree> onPath,
+            HashSet<(ProjectReferenceTree, ProjectReferenceTree)> backEdges)
+        {
+            visited.Add(node);
+            onPath.Add(node);
+
+            foreach (var reference in node.References)
+            {
+                if (!included.Contains(reference)) continue;
+
+                if (onPath.Contains(reference)) backEdges.Add((node, reference));
+                else if (!visited.Contains(reference))
+                    Walk(reference, included, visited, onPath, backEdges);
+            }
+
+            onPath.Remove(node);
+        }
+
+        private static void Style(Edge edge, GraphPalette palette, bool isBackEdge)
+        {
+            edge.Attr.Color = isBackEdge ? palette.CycleEdge : palette.Edge;
+            edge.Attr.LineWidth = isBackEdge ? 2 : 1;
+            if (isBackEdge) edge.LabelText = "cycle";
         }
 
         /// <summary>Reads the project a node was built from, or null for a node we did not build.</summary>
