@@ -128,6 +128,7 @@ project that was left out.
 | Right-click the background | **Reset dragged positions** - put everything back where the layout wants it. |
 | Mouse wheel | Zoom |
 | **Fit** | Fit the graph to the window |
+| Hover a node | A tooltip with its solution folder, reference counts and path |
 | Click a node | Select it; the status bar shows its reference counts and project path |
 | Double-click a node | Re-root the graph on that project |
 | Right-click a node | Highlighting menu — see below |
@@ -210,8 +211,12 @@ survives a rebuild - changing view, direction or depth, pressing **Refresh**, co
 folder. An offset rather than a fixed coordinate on purpose: every rebuild is a fresh layout, and
 a coordinate from the previous one would put the node somewhere arbitrary in the new one.
 
-Right-click the background for **Reset dragged positions** to put everything back. Offsets last
-as long as the solution is open; they are not written to disk.
+Right-click the background for **Reset dragged positions** to put everything back.
+
+Offsets are written to `%LOCALAPPDATA%\DependencyGraph\positions`, one small file per solution,
+so an arrangement survives closing the solution and closing Visual Studio. Nothing is written
+into your repository. Because the file is keyed by the solution's path, moving or renaming the
+solution starts again from the layout.
 
 ## External references
 
@@ -302,16 +307,20 @@ out.
 | `Commands\DependencyGraph.cs` | The **Show Dependency Graph** command; opens the tool window. |
 | `UI\DependencyGraphWindow.cs` | The dockable tool window pane. |
 | `UI\DependencyGraphControl.xaml[.cs]` | The window contents — command bar, graph host, status bar, selection and highlighting. |
-| `UI\GraphBuilder.cs` | Turns a `ProjectReferenceTree` into an MSAGL graph; depth limiting and cycle detection. |
+| `UI\GraphBuilder.cs` | Turns a `ProjectReferenceTree` into an MSAGL graph; depth limiting, cycle detection, folder boxes and collapsing. |
+| `UI\GraphDrag.cs` | Moving a node or a folder box after layout, and redrawing the references that follow. |
+| `UI\NodeTooltip.cs` | What the tooltip says about the node under the pointer. |
 | `UI\GraphPalette.cs` | The light and dark colour sets, chosen from the shell's theme. |
 | `UI\ProjectChoice.cs` | One entry in the project picker; carries the stable key beside the display name. |
 | `UI\ImageSaver.cs` | PNG export, including the full-extent capture and its size cap. |
 | `Scan\VSScanner.cs` | Enumerates the solution's projects and reads their references. |
 | `Scan\ProjectReferenceTree.cs` | The reference graph, depth levels and reference counts. |
 | `Scan\OutputHelper.cs` | DGML and Graphviz export, and shelling out to `dot`. |
+| `State\Settings.cs` | The options page and its stored values. |
+| `State\NodePositions.cs` | Dragged positions on disk, one small file per solution. |
 | `VSCommandTable.vsct` | Menu placement for the command. |
 | `DependencyGraph.pkgdef` | Checked-in package definition — see [above](#the-checked-in-pkgdef). |
-| `Tests` | The checks — see [below](#tests). |
+| `Tests\` | The checks — see [below](#tests). |
 
 ## Tests
 
@@ -344,7 +353,7 @@ the throwaway solution the screenshots use.
   **Deepest references only** together.
 - References redrawn after a drag are straight lines rather than routed splines, so a dragged
   node's arrows can cross a box they would otherwise have gone around.
-- Dragged positions are kept as an offset from wherever the layout puts a node, and are held for
-  as long as the solution is open rather than written to disk.
+- Dragged positions are kept as an offset from wherever the layout puts a node. Moving or
+  renaming the solution file loses them, since they are keyed by its path.
 - Collapsing a folder aggregates its references onto one node, so the connection count drops:
   several references between the same pair of boxes become one arrow.

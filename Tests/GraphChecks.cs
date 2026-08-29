@@ -61,6 +61,8 @@ public static class RenderTest
         CheckGrouping(root, pal, outDir);
         CheckCollapse(root, pal, outDir);
         CheckDragging(root, pal);
+        CheckStoredPositions();
+        CheckTooltips();
 
         Console.WriteLine();
         Console.WriteLine(_failures == 0 ? "ALL CHECKS PASSED" : _failures + " CHECK(S) FAILED");
@@ -677,6 +679,163 @@ public static class RenderTest
         Check(Math.Abs(box2.GeometryNode.BoundingBox.Width - boxBefore.Width) < 0.5,
             "without the box growing (" + boxBefore.Width.ToString("0.0")
             + " -> " + box2.GeometryNode.BoundingBox.Width.ToString("0.0") + ")");
+    }
+
+    /// <summary>
+    /// Dragged positions surviving on disk, per solution.
+    /// </summary>
+    /// <remarks>
+    /// Project keys are solution-relative paths, so the ids going through this file contain
+    /// backslashes, dots and spaces; and the file is in a place a person can open and edit, so a
+    /// damaged one has to be ignored rather than allowed to throw on the way to drawing a graph.
+    /// </remarks>
+    static void CheckStoredPositions()
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== stored positions ===");
+
+        var type = _dg.GetType("DependencyGraph.State.NodePositions", true);
+        var load = type.GetMethod("Load", BindingFlags.Public | BindingFlags.Static);
+        var save = type.GetMethod("Save", BindingFlags.Public | BindingFlags.Static);
+        var fileFor = type.GetMethod("FileFor", BindingFlags.Public | BindingFlags.Static);
+
+        // A path that does not exist is fine - nothing is ever opened from it.
+        string solution = @"D:\checks\Contoso Demo\Contoso.Demo.sln";
+        string file = (string)fileFor.Invoke(null, new object[] { solution });
+        Console.WriteLine("        file: " + file);
+
+        Check(file != null && file.EndsWith(".txt", StringComparison.OrdinalIgnoreCase),
+            "a solution maps to a file");
+        Check(file != null && file.IndexOf("Contoso.Demo", StringComparison.OrdinalIgnoreCase) >= 0,
+            "named after the solution, so the folder can be read by eye");
+        Check(file != null && file.StartsWith(
+                  Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+                  StringComparison.OrdinalIgnoreCase),
+            "under LocalApplicationData, not beside the solution");
+
+        // Two solutions of the same name in different folders must not share a file.
+        string other = (string)fileFor.Invoke(null, new object[] { @"D:\elsewhere\Contoso.Demo.sln" });
+        Check(other != file, "two solutions sharing a name get different files");
+
+        // The same solution must map to the same file every run, whatever the casing.
+        string again = (string)fileFor.Invoke(null, new object[] { solution.ToUpperInvariant() });
+        Check(again == file, "the mapping is stable and case-insensitive");
+
+        try
+        {
+            var offsets = new Dictionary<string, Microsoft.Msagl.Core.Geometry.Point>
+            {
+                { @"Components\Contoso.Core\Contoso.Core.csproj",
+                    new Microsoft.Msagl.Core.Geometry.Point(60.5, -25.25) },
+                { "Presentation", new Microsoft.Msagl.Core.Geometry.Point(-3, 0.125) },
+            };
+
+            save.Invoke(null, new object[] { solution, offsets });
+            Check(File.Exists(file), "saving writes the file");
+
+            var read = (System.Collections.IDictionary)load.Invoke(null, new object[] { solution });
+            Check(read.Count == 2, "and reading it back gives both entries (got " + read.Count + ")");
+
+            var core = read[@"Components\Contoso.Core\Contoso.Core.csproj"];
+            Check(core != null && core.ToString() == offsets[@"Components\Contoso.Core\Contoso.Core.csproj"].ToString(),
+                "a project key with backslashes and dots round-trips exactly (" + core + ")");
+
+            var box = read["Presentation"];
+            Check(box != null && box.ToString() == offsets["Presentation"].ToString(),
+                "so does a folder box, with a fractional offset (" + box + ")");
+
+            // Nothing left to remember means no file left behind.
+            save.Invoke(null, new object[] { solution, new Dictionary<string, Microsoft.Msagl.Core.Geometry.Point>() });
+            Check(!File.Exists(file), "resetting to nothing deletes the file");
+
+            // A damaged file must read as "no offsets", not throw.
+            Directory.CreateDirectory(Path.GetDirectoryName(file));
+            File.WriteAllText(file, "# DependencyGraph node offsets v1\nnot\ta\tnumber\n"
+                                    + "NaN\t0\tbad.csproj\n1e400\t0\thuge.csproj\n"
+                                    + "\t\t\n12\tgood.csproj\n7\t8\tfine.csproj\n");
+            var salvaged = (System.Collections.IDictionary)load.Invoke(null, new object[] { solution });
+            Check(salvaged.Count == 1 && salvaged["fine.csproj"] != null,
+                "a damaged file yields only the lines that parse (got " + salvaged.Count + ")");
+
+            File.WriteAllBytes(file, new byte[] { 0x00, 0xFF, 0x00, 0xFF });
+            var binary = (System.Collections.IDictionary)load.Invoke(null, new object[] { solution });
+            Check(binary.Count == 0, "and binary rubbish yields nothing at all rather than throwing");
+        }
+        finally
+        {
+            try { if (File.Exists(file)) File.Delete(file); } catch { }
+        }
+
+        var none = (System.Collections.IDictionary)load.Invoke(null, new object[] { null });
+        Check(none.Count == 0, "no solution means no offsets, and no exception");
+    }
+
+    /// <summary>
+    /// The hover tooltips: that the graph surface has one, that its timings are long enough for
+    /// text worth reading, and that the text says something true about the node.
+    /// </summary>
+    /// <remarks>
+    /// Only the text is checked here. The wiring that shows it - the tooltip on the graph host and
+    /// the ToolTipService timings - lives in the control's XAML, and the control cannot be built
+    /// outside Visual Studio, so that part is confirmed by hovering in the IDE.
+    /// </remarks>
+    static void CheckTooltips()
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== tooltips ===");
+
+        var type = _dg.GetType("DependencyGraph.UI.NodeTooltip", true);
+        var forNode = type.GetMethod("For", BindingFlags.Public | BindingFlags.Static);
+        Check(forNode != null, "NodeTooltip.For builds the text");
+        if (forNode == null) return;
+
+        Check((string)forNode.Invoke(null, new object[] { null, null }) == null,
+            "empty canvas gets no tooltip, so none is shown over the background");
+
+        object pal = _palette.GetMethod("ForVsTheme", BindingFlags.Public | BindingFlags.Static)
+                             .Invoke(null, null);
+        object all = Enum.Parse(_visibility, "All");
+        var graph = BuildGraph(BuildTree(), all, LayerDirection.TB, pal, int.MaxValue);
+
+        Func<string, string> folderOf = key => key == "SolutionNodes" ? "Components" : null;
+
+        string text = (string)forNode.Invoke(null,
+            new object[] { graph.FindNode("SolutionNodes"), folderOf });
+        Console.WriteLine("        node tooltip:");
+        foreach (var line in (text ?? "").Split('\n')) Console.WriteLine("          | " + line);
+
+        Check(text != null && text.StartsWith("SolutionNodes", StringComparison.Ordinal),
+            "a project's tooltip leads with its name");
+        Check(text != null && text.IndexOf("Solution folder: Components", StringComparison.Ordinal) >= 0,
+            "and names the solution folder it is in");
+        Check(text != null && text.IndexOf("References 4 projects", StringComparison.Ordinal) >= 0,
+            "and how many projects it references");
+        Check(text != null && text.IndexOf("Referenced by 1 project\n", StringComparison.Ordinal) >= 0,
+            "and how many reference it, in the singular when there is one");
+        Check(text != null && text.IndexOf("Double-click", StringComparison.Ordinal) >= 0,
+            "and what double-clicking does, which nothing else in the window says");
+
+        // Without a scanned solution there is no folder lookup, and the tooltip still has to work.
+        string noFolder = (string)forNode.Invoke(null,
+            new object[] { graph.FindNode("SolutionNodes"), null });
+        Check(noFolder != null && noFolder.IndexOf("Solution folder", StringComparison.Ordinal) < 0,
+            "with no folder lookup it simply leaves the folder out");
+
+        string rootText = (string)forNode.Invoke(null,
+            new object[] { graph.FindNode("SolutionNodesLauncher"), null });
+        Check(rootText != null && rootText.IndexOf("drawn from", StringComparison.Ordinal) >= 0,
+            "the root project's tooltip says that is what it is");
+
+        // A collapsed folder node has no project behind it, so it must not fall through to one.
+        var collapsedGraph = BuildGraph(BuildTree(), all, LayerDirection.TB, pal, int.MaxValue,
+            key => key == "SolutionNodes" || key == "SolutionScan" ? "Components" : null,
+            null, new List<string> { "Components" });
+
+        string folderText = (string)forNode.Invoke(null,
+            new object[] { collapsedGraph.FindNode("folder:Components"), null });
+        Check(folderText != null && folderText.StartsWith("Components", StringComparison.Ordinal)
+              && folderText.IndexOf("Click it to expand", StringComparison.Ordinal) >= 0,
+            "a collapsed folder's tooltip says what it is and how to open it");
     }
 
     static string GraphBuilderCollapsedFolderOf(Node node)

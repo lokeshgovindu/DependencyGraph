@@ -67,8 +67,10 @@
     <Compile Include="UI\DependencyGraphWindow.cs" />
     <Compile Include="UI\GraphBuilder.cs" />
     <Compile Include="UI\GraphDrag.cs" />
+    <Compile Include="UI\NodeTooltip.cs" />
     <Compile Include="UI\GraphPalette.cs" />
     <Compile Include="UI\ProjectChoice.cs" />
+    <Compile Include="State\NodePositions.cs" />
     <Compile Include="State\Settings.cs" />
     <Compile Include="Scan\OutputHelper.cs" />
     <Compile Include="VSCommandTable.cs">

@@ -100,6 +100,7 @@ namespace DependencyGraph.UI
             GraphHost.SizeChanged += GraphHost_SizeChanged;
 
             BuildNodeContextMenu();
+            SetUpNodeTooltip();
             PopulateFixedControls();
 
             Btn_ZoomFit.Click           += (s, e) => { _viewer.SetInitialTransform(); UpdateZoomIndicator(); };
@@ -322,7 +323,11 @@ namespace DependencyGraph.UI
             _selectedNodes.Clear();
             _focusKeys.Clear();
             _collapsedFolders.Clear();
+
+            // The offsets stay on disk; dropping the path is what makes the next scan read them
+            // back, including when the same solution is opened again.
             _dragOffsets.Clear();
+            _solutionPath = null;
             _visuals = null;
             _edgeVisuals = null;
             _dragging = null;
@@ -491,6 +496,7 @@ namespace DependencyGraph.UI
                     return;
                 }
 
+                LoadStoredPositions(_dte.Solution.FullName);
                 _vsScanner = new VSScanner(_dte);
             }
             catch (Exception ex)
@@ -798,6 +804,64 @@ namespace DependencyGraph.UI
             return (_viewer.ObjectUnderMouseCursor as VNode)?.Node;
         }
 
+        #region Node tooltips
+
+        /// <summary>
+        /// Sets up the hover tooltip for the graph surface.
+        /// </summary>
+        /// <remarks>
+        /// One tooltip on the host panel whose content is swapped as the pointer moves between
+        /// nodes, rather than a tooltip per node: MSAGL owns the elements it draws and rebuilds
+        /// them on every layout, so anything attached to them has to be reattached constantly.
+        /// The graph itself can only show a short name, so this is where the rest of what is known
+        /// about a project belongs - its path, its counts, its folder.
+        /// </remarks>
+        private void SetUpNodeTooltip()
+        {
+            // Has to start non-null, or WPF never raises ToolTipOpening for us to cancel.
+            GraphHost.ToolTip = " ";
+
+            GraphHost.ToolTipOpening += (s, e) =>
+            {
+                string text = TooltipFor(NodeUnderCursor());
+                if (text == null) { e.Handled = true; return; }
+
+                GraphHost.ToolTip = text;
+            };
+        }
+
+        /// <summary>The node the tooltip text was last built for.</summary>
+        private MsaglNode _hovered;
+
+        /// <summary>
+        /// Keeps the tooltip text in step with the pointer.
+        /// </summary>
+        /// <remarks>
+        /// Belt and braces with the ToolTipOpening handler above, which would be enough on its own
+        /// were MSAGL's idea of what is under the cursor not one mouse-move behind: it raises its
+        /// move event first and hit-tests afterwards, so a tooltip built at the moment of opening
+        /// can describe the node the pointer has just left.
+        /// </remarks>
+        private void UpdateHoverTooltip()
+        {
+            if (_dragging != null) return;
+
+            var node = NodeUnderCursor();
+            if (node == _hovered) return;
+
+            _hovered = node;
+            GraphHost.ToolTip = TooltipFor(node) ?? " ";
+        }
+
+        /// <summary>What to say about the node under the pointer, or null for empty canvas.</summary>
+        private string TooltipFor(MsaglNode node)
+        {
+            return NodeTooltip.For(node,
+                _vsScanner == null ? (Func<string, string>)null : _vsScanner.SolutionFolderOf);
+        }
+
+        #endregion
+
         #region Dragging
 
         /// <summary>The node or folder box being dragged, null when not dragging.</summary>
@@ -819,7 +883,7 @@ namespace DependencyGraph.UI
         /// </remarks>
         private void Viewer_MouseMove(object sender, Microsoft.Msagl.Drawing.MsaglMouseEventArgs e)
         {
-            if (_dragging == null) return;
+            if (_dragging == null) { UpdateHoverTooltip(); return; }
 
             if (!e.LeftButtonIsPressed) { EndDrag(); return; }
 
@@ -845,7 +909,12 @@ namespace DependencyGraph.UI
             _dragging = null;
 
             // A folder name is placed against its box, so it has to follow the box.
-            if (_dragMoved) _folderNames.Reposition();
+            if (_dragMoved)
+            {
+                _folderNames.Reposition();
+                SaveStoredPositions();
+            }
+
             _dragMoved = false;
         }
 
@@ -880,6 +949,9 @@ namespace DependencyGraph.UI
         private readonly Dictionary<string, Microsoft.Msagl.Core.Geometry.Point> _dragOffsets =
             new Dictionary<string, Microsoft.Msagl.Core.Geometry.Point>();
 
+        /// <summary>The solution the offsets in <see cref="_dragOffsets"/> belong to.</summary>
+        private string _solutionPath;
+
         private void Remember(MsaglNode node, Microsoft.Msagl.Core.Geometry.Point delta)
         {
             string id = node?.Id;
@@ -887,6 +959,34 @@ namespace DependencyGraph.UI
 
             _dragOffsets.TryGetValue(id, out var offset);
             _dragOffsets[id] = offset + delta;
+        }
+
+        /// <summary>
+        /// Reads back the offsets stored for this solution, when it is not the one already loaded.
+        /// </summary>
+        private void LoadStoredPositions(string solutionPath)
+        {
+            if (string.Equals(_solutionPath, solutionPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _solutionPath = solutionPath;
+            _dragOffsets.Clear();
+
+            foreach (var pair in State.NodePositions.Load(solutionPath))
+                _dragOffsets[pair.Key] = pair.Value;
+        }
+
+        /// <summary>
+        /// Writes the offsets out, so an arrangement survives closing the solution.
+        /// </summary>
+        /// <remarks>
+        /// On dropping a node rather than on a timer or at shut-down: it is a few hundred bytes,
+        /// and there is no reliable moment later - a tool window is not told the IDE is closing.
+        /// </remarks>
+        private void SaveStoredPositions()
+        {
+            if (_solutionPath == null) return;
+            State.NodePositions.Save(_solutionPath, _dragOffsets);
         }
 
         /// <summary>
@@ -931,7 +1031,9 @@ namespace DependencyGraph.UI
         private void ResetPositions()
         {
             if (_dragOffsets.Count == 0) return;
+
             _dragOffsets.Clear();
+            SaveStoredPositions();
             Rebuild();
         }
 

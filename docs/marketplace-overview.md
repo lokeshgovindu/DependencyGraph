@@ -72,7 +72,8 @@ the projects involved. This points straight at them.
 
 ## Getting around
 
-Drag to pan, wheel to zoom. Click a node to select it. Double-click to re-root the graph on that
+Hover a node for its solution folder, its reference counts and its path. Drag to pan, wheel to
+zoom. Click a node to select it. Double-click to re-root the graph on that
 project. Right-click for highlighting — everything that **references** this project, or
 everything it **references** directly.
 

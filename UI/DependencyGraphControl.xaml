@@ -27,7 +27,15 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid>
+    <!--
+        ToolTipService's timings are inheritable, so setting them here covers the command bar and
+        the graph surface. The default five seconds is not enough for tooltips that explain what a
+        control is for, and the default half-second delay makes them fire while the pointer is
+        only passing over the bar.
+    -->
+    <Grid ToolTipService.InitialShowDelay="450"
+          ToolTipService.ShowDuration="60000"
+          ToolTipService.BetweenShowDelay="200">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
@@ -60,49 +68,49 @@
                               IsEditable="True"
                               IsTextSearchEnabled="True"
                               StaysOpenOnEdit="True"
-                              ToolTip="Project to show the reference tree for. Type to search."/>
+                              ToolTip="Which project the graph is drawn from.&#10;Type to search. Two projects sharing a name show their paths."/>
 
                     <TextBlock x:Name="Lbl_Show" Text="Show" Style="{StaticResource BarLabel}"/>
                     <ComboBox x:Name="CBDisplayMethod"
                               Style="{StaticResource BarCombo}"
                               Width="175"
-                              ToolTip="Which references to draw as edges."/>
+                              ToolTip="Which references become arrows.&#10;&#10;Deepest references only  -  one arrow per project, giving a clean tree&#10;All references  -  every reference of every project, the honest picture&#10;Project references only  -  this project and what it references directly&#10;Referenced by (impact)  -  everything that depends on this project"/>
 
                     <TextBlock x:Name="Lbl_Direction" Text="Direction" Style="{StaticResource BarLabel}"/>
                     <ComboBox x:Name="CBOrientation"
                               Style="{StaticResource BarCombo}"
                               Width="120"
-                              ToolTip="Direction the reference depth grows in."/>
+                              ToolTip="Which way the graph grows as references get deeper."/>
 
                     <TextBlock x:Name="Lbl_Depth" Text="Depth" Style="{StaticResource BarLabel}"/>
                     <ComboBox x:Name="CBDepth"
                               Style="{StaticResource BarCombo}"
                               Width="70"
                               Margin="0"
-                              ToolTip="How many levels of references to draw. Limit this on a large solution."/>
+                              ToolTip="How many levels of references to draw.&#10;&#10;All follows them to the end. A number stops after that many levels, cutting&#10;whole levels cleanly - you never get an arrow pointing at a project that was&#10;left out. Worth limiting on a large solution."/>
                 </StackPanel>
 
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
                     <Button x:Name="Btn_ZoomFit" Style="{StaticResource BarButton}"
-                            ToolTip="Fit the whole graph in the window.">Fit</Button>
+                            ToolTip="Zoom so the whole graph fits the window.&#10;It opens at 100% instead, which keeps the labels crisp.">Fit</Button>
                     <Button x:Name="Btn_Refresh" Style="{StaticResource BarButton}"
-                            ToolTip="Rescan the solution.">Refresh</Button>
+                            ToolTip="Rescan the solution.&#10;Adding or removing a project is picked up on its own; use this after editing&#10;a project's references outside the IDE.">Refresh</Button>
 
                     <ToggleButton x:Name="Btn_Focus" Height="23" Padding="9,0" Margin="0,0,4,0"
-                                  ToolTip="Draw only the selected projects. Ctrl+click nodes to select several.">Focus</ToggleButton>
+                                  ToolTip="Narrow the graph to the projects you have picked.&#10;&#10;Ctrl+click two or more nodes, then switch this on: everything else is dropped&#10;and you are left with just those projects and the references between them.&#10;For getting a readable answer out of a solution with hundreds of projects.&#10;&#10;Only references directly between the projects you picked are drawn. If one&#10;reaches another through a project you did not pick, there is no arrow.&#10;&#10;Switch off to get the whole graph back.">Focus</ToggleButton>
 
                     <ToggleButton x:Name="Btn_Group" Height="23" Padding="9,0" Margin="0,0,4,0"
-                                  ToolTip="Group projects into boxes by solution folder.">Group</ToggleButton>
+                                  ToolTip="Draw a box around the projects in each solution folder, named after it.&#10;&#10;Click the chevron beside a folder name to collapse that folder to a single&#10;node, with its references gathered onto it; click that node to expand it again.">Group</ToggleButton>
 
                     <ToggleButton x:Name="Btn_Legend" Height="23" Padding="9,0" Margin="0,0,4,0"
-                                  ToolTip="Show what the colours mean.">Legend</ToggleButton>
+                                  ToolTip="Show what the colours and arrows mean.">Legend</ToggleButton>
 
                     <Border x:Name="BarSeparator" Width="1" Margin="5,3" SnapsToDevicePixels="True"/>
 
                     <Button x:Name="Btn_SaveAs" Style="{StaticResource BarButton}"
-                            ToolTip="Save this project's graph as PNG, DGML or Graphviz.">Save As...</Button>
+                            ToolTip="Save the graph on screen.&#10;&#10;PNG captures the whole graph, not just the part in view. DGML opens in Visual&#10;Studio's own graph editor. Graphviz DOT is plain text; SVG and PNG through&#10;Graphviz are offered when dot.exe can be found.">Save As...</Button>
                     <Button x:Name="Btn_SaveSolutionDGML" Style="{StaticResource BarButton}" Margin="0"
-                            ToolTip="Save the whole solution's graph as DGML or Graphviz.">Save Solution Graph...</Button>
+                            ToolTip="Save every project in the solution and its references - not just the graph on&#10;screen - as DGML or Graphviz.">Save Solution Graph...</Button>
                 </StackPanel>
             </Grid>
         </Border>
