@@ -24,6 +24,7 @@ namespace DependencyGraph.UI
         private const string ShowDeepestReferencesOnly = "Deepest references only";
         private const string ShowAllReferences         = "All references";
         private const string ShowProjectReferencesOnly = "Project references only";
+        private const string ShowReferencedBy          = "Referenced by (impact)";
 
         private readonly Dictionary<string, ConnectionsVisibility> _displayMethods =
             new Dictionary<string, ConnectionsVisibility>
@@ -31,6 +32,7 @@ namespace DependencyGraph.UI
                 { ShowDeepestReferencesOnly, ConnectionsVisibility.Deepest },
                 { ShowAllReferences,         ConnectionsVisibility.All     },
                 { ShowProjectReferencesOnly, ConnectionsVisibility.Project },
+                { ShowReferencedBy,          ConnectionsVisibility.ReferencedBy },
             };
 
         private readonly Dictionary<string, LayerDirection> _directions =
@@ -92,6 +94,12 @@ namespace DependencyGraph.UI
 
             Btn_ZoomFit.Click           += (s, e) => { _viewer.SetInitialTransform(); UpdateZoomIndicator(); };
             Btn_Refresh.Click           += (s, e) => Rescan();
+            Btn_Focus.Checked           += (s, e) => ApplyFocus();
+            Btn_Focus.Unchecked         += (s, e) => { _focusKeys.Clear(); Rebuild(); };
+            Btn_Group.Checked           += (s, e) => Rebuild();
+            Btn_Group.Unchecked         += (s, e) => Rebuild();
+            Btn_Legend.Checked          += (s, e) => LegendPanel.Visibility = Visibility.Visible;
+            Btn_Legend.Unchecked        += (s, e) => LegendPanel.Visibility = Visibility.Collapsed;
             Btn_SaveAs.Click            += Btn_SaveAs_Click;
             Btn_SaveSolutionDGML.Click  += Btn_SaveSolutionDGML_Click;
 
@@ -137,6 +145,12 @@ namespace DependencyGraph.UI
             GraphHost.Background     = backBrush;
             StatusBarMain.Background  = backBrush;
             StatusBarMain.BorderBrush = lineBrush;
+            LegendPanel.Background    = backBrush;
+            LegendPanel.BorderBrush   = lineBrush;
+            Btn_Legend.Foreground     = brush;
+            Btn_Legend.Background     = backBrush;
+            Btn_Legend.BorderBrush    = lineBrush;
+            BuildLegend();
 
             // Foreground is an inherited TextElement property, so setting it on the two
             // containers reaches every TextBlock inside them.
@@ -146,7 +160,8 @@ namespace DependencyGraph.UI
 
             // Buttons and combo boxes each bring their own template with its own brushes, so
             // inheritance does not reach them.
-            foreach (var button in new[] { Btn_ZoomFit, Btn_Refresh, Btn_SaveAs, Btn_SaveSolutionDGML })
+            foreach (var button in new System.Windows.Controls.Primitives.ButtonBase[]
+                     { Btn_ZoomFit, Btn_Refresh, Btn_SaveAs, Btn_SaveSolutionDGML, Btn_Group, Btn_Focus })
             {
                 button.Foreground = brush;
                 button.Background = backBrush;
@@ -158,6 +173,64 @@ namespace DependencyGraph.UI
             // the selected item is drawn by a TextBlock that ComboBox's ControlTemplate creates,
             // and implicit styles do not reach elements generated inside a template, so setting
             // a dark background left the text dark-on-dark and invisible.
+        }
+
+        /// <summary>
+        /// Fills in the legend. Rebuilt whenever the theme changes, since it is showing the
+        /// palette's own colours.
+        /// </summary>
+        private void BuildLegend()
+        {
+            LegendItems.Children.Clear();
+
+            AddLegendRow(_palette.RootFill, _palette.RootStroke, "The project being examined");
+            AddLegendRow(_palette.NodeFill, _palette.NodeStroke, "Referenced project");
+            AddLegendRow(_palette.ReferencingFill, _palette.NodeStroke, "References the selection");
+            AddLegendRow(_palette.ReferencedFill, _palette.NodeStroke, "Referenced by the selection");
+            AddLegendRow(_palette.NodeFill, _palette.SelectedStroke, "Selected");
+            AddLegendLine(_palette.Edge, "References  (arrow points at the dependency)");
+            AddLegendLine(_palette.CycleEdge, "Circular reference");
+        }
+
+        private void AddLegendRow(Microsoft.Msagl.Drawing.Color fill,
+            Microsoft.Msagl.Drawing.Color stroke, string text)
+        {
+            var swatch = new Border
+            {
+                Width = 22, Height = 13,
+                Background = Brush(fill),
+                BorderBrush = Brush(stroke),
+                BorderThickness = new Thickness(1),
+                CornerRadius = new CornerRadius(2),
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            AddLegendItem(swatch, text);
+        }
+
+        private void AddLegendLine(Microsoft.Msagl.Drawing.Color colour, string text)
+        {
+            var line = new Border
+            {
+                Width = 22, Height = 2,
+                Background = Brush(colour),
+                Margin = new Thickness(0, 0, 8, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            AddLegendItem(line, text);
+        }
+
+        private void AddLegendItem(UIElement swatch, string text)
+        {
+            var row = new StackPanel { Orientation = System.Windows.Controls.Orientation.Horizontal, Margin = new Thickness(0, 2, 0, 2) };
+            row.Children.Add(swatch);
+            row.Children.Add(new TextBlock
+            {
+                Text = text,
+                Foreground = Brush(_palette.NodeText),
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+            LegendItems.Children.Add(row);
         }
 
         /// <summary>Whether this control is currently listening for theme changes.</summary>
@@ -199,16 +272,19 @@ namespace DependencyGraph.UI
             _loading = true;
 
             foreach (var name in _displayMethods.Keys) CBDisplayMethod.Items.Add(name);
-            CBDisplayMethod.SelectedIndex = 0;
-
             foreach (var name in _directions.Keys) CBOrientation.Items.Add(name);
-            CBOrientation.SelectedIndex = 0;
+
+            // Start from the saved defaults rather than always the first entry.
+            CBDisplayMethod.SelectedItem = DefaultsFor(_settings.View) ?? ShowDeepestReferencesOnly;
+            CBOrientation.SelectedItem   = DefaultsFor(_settings.Direction) ?? "Top to bottom";
 
             // "All" plus a few concrete cuts. Boxed ints, so SelectedDepth can read them back
             // without parsing.
             CBDepth.Items.Add(DepthAll);
             for (int depth = 1; depth <= 6; ++depth) CBDepth.Items.Add(depth);
-            CBDepth.SelectedIndex = 0;
+            CBDepth.SelectedItem = _settings.Depth >= 1 && _settings.Depth <= 6
+                ? (object)_settings.Depth
+                : DepthAll;
 
             _loading = false;
         }
@@ -271,6 +347,8 @@ namespace DependencyGraph.UI
         private void ApplyActualSize()
         {
             if (_graph == null) return;
+
+            if (_settings.FitOnOpen) { _viewer.SetInitialTransform(); UpdateZoomIndicator(); return; }
 
             var anchor = _graph.Nodes.FirstOrDefault(n => GraphBuilder.ProjectOf(n)?.DepthLevel == 0)
                       ?? _graph.Nodes.FirstOrDefault();
@@ -396,6 +474,41 @@ namespace DependencyGraph.UI
         /// <summary>The "no limit" entry in the depth picker.</summary>
         private const string DepthAll = "All";
 
+        /// <summary>
+        /// Settings snapshot taken when the window is built, so the options page can be read
+        /// without a shell dependency in the designer or a test harness.
+        /// </summary>
+        private readonly State.Settings _settings = LoadSettings();
+
+        private static State.Settings LoadSettings()
+        {
+            try { return State.Settings.Instance; }
+            catch { return new State.Settings(); }
+        }
+
+        /// <summary>Maps a saved enum default onto the matching combo entry.</summary>
+        private string DefaultsFor(State.DefaultView view)
+        {
+            switch (view)
+            {
+                case State.DefaultView.AllReferences:         return ShowAllReferences;
+                case State.DefaultView.ProjectReferencesOnly: return ShowProjectReferencesOnly;
+                case State.DefaultView.ReferencedBy:          return ShowReferencedBy;
+                default:                                      return ShowDeepestReferencesOnly;
+            }
+        }
+
+        private string DefaultsFor(State.DefaultDirection direction)
+        {
+            switch (direction)
+            {
+                case State.DefaultDirection.LeftToRight: return "Left to right";
+                case State.DefaultDirection.BottomToTop: return "Bottom to top";
+                case State.DefaultDirection.RightToLeft: return "Right to left";
+                default:                                 return "Top to bottom";
+            }
+        }
+
         /// <summary>Depth cut currently chosen, or <see cref="GraphBuilder.UnlimitedDepth"/>.</summary>
         private int SelectedDepth
             => CBDepth.SelectedItem is int depth ? depth : GraphBuilder.UnlimitedDepth;
@@ -414,9 +527,22 @@ namespace DependencyGraph.UI
             try
             {
                 // Resolved by key, so a name shared by two projects picks the right one.
-                _prt = visibility == ConnectionsVisibility.Project
-                    ? ProjectReferenceTree.GetProjectReferencesOnly(choice.Project)
-                    : new ProjectReferenceTree(choice.Project);
+                switch (visibility)
+                {
+                    case ConnectionsVisibility.Project:
+                        _prt = ProjectReferenceTree.GetProjectReferencesOnly(choice.Project);
+                        break;
+
+                    case ConnectionsVisibility.ReferencedBy:
+                        // Needs the whole solution: a project does not know who references it.
+                        _prt = ProjectReferenceTree.GetReferencedByTree(
+                            choice.Project, _vsScanner.Projects);
+                        break;
+
+                    default:
+                        _prt = new ProjectReferenceTree(choice.Project);
+                        break;
+                }
             }
             catch (Exception ex)
             {
@@ -436,9 +562,16 @@ namespace DependencyGraph.UI
 
             HideEmptyMessage();
 
+            // Which projects are the solution's own, so references that lead outside it can be
+            // drawn as such rather than looking like ordinary nodes with nothing beneath them.
+            _prt.MarkExternals(Choices.Select(c => c.Key));
+
             _selected = null;
+            _selectedNodes.Clear();
             _visuals = null;
-            _graph = GraphBuilder.Build(_prt, visibility, SelectedDirection, _palette, SelectedDepth);
+            _graph = GraphBuilder.Build(_prt, visibility, SelectedDirection, _palette, SelectedDepth,
+                folderOf: Btn_Group.IsChecked == true ? (Func<string, string>)_vsScanner.SolutionFolderOf : null,
+                focusKeys: _focusKeys.Count > 0 ? _focusKeys : null);
             _viewer.Graph = _graph;
 
             // Frame the new graph now if the panel is measured, otherwise leave it to
@@ -511,7 +644,9 @@ namespace DependencyGraph.UI
                 return;
             }
 
-            Select(node);
+            // Ctrl+click builds up a set, so several projects can be focused at once.
+            bool additive = (Keyboard.Modifiers & System.Windows.Input.ModifierKeys.Control) != 0;
+            Select(node, additive);
         }
 
         private MsaglNode NodeUnderCursor()
@@ -519,25 +654,78 @@ namespace DependencyGraph.UI
             return (_viewer.ObjectUnderMouseCursor as VNode)?.Node;
         }
 
-        private void Select(MsaglNode node)
+        /// <summary>Every node currently selected. Ctrl+click adds to it.</summary>
+        private readonly HashSet<MsaglNode> _selectedNodes = new HashSet<MsaglNode>();
+
+        /// <summary>Projects the graph is narrowed to, empty when not focused.</summary>
+        private readonly HashSet<string> _focusKeys = new HashSet<string>();
+
+        /// <summary>
+        /// Narrows the graph to the selected projects. Does nothing without a selection, since
+        /// focusing on nothing would just empty the window.
+        /// </summary>
+        private void ApplyFocus()
         {
-            _selected = node;
+            var keys = _selectedNodes
+                .Select(n => GraphBuilder.ProjectOf(n)?.Key)
+                .Where(k => k != null)
+                .ToList();
+
+            if (keys.Count == 0)
+            {
+                Btn_Focus.IsChecked = false;
+                return;
+            }
+
+            _focusKeys.Clear();
+            foreach (var key in keys) _focusKeys.Add(key);
+            Rebuild();
+        }
+
+        private void Select(MsaglNode node, bool additive = false)
+        {
+            if (!additive) _selectedNodes.Clear();
+
+            if (node != null)
+            {
+                if (additive && _selectedNodes.Contains(node)) _selectedNodes.Remove(node);
+                else _selectedNodes.Add(node);
+            }
+
+            // Last one clicked, which is what the context menu acts on.
+            _selected = _selectedNodes.Contains(node) ? node : _selectedNodes.FirstOrDefault();
+
             ResetHighlights();
 
-            if (node == null)
+            foreach (var selected in _selectedNodes)
+            {
+                selected.Attr.Color = _palette.SelectedStroke;
+                selected.Attr.LineWidth = 3;
+                Invalidate(selected);
+            }
+
+            ShowSelectionDetail();
+        }
+
+        private void ShowSelectionDetail()
+        {
+            if (_selectedNodes.Count == 0)
             {
                 SB_Selection.Inlines.Clear();
                 return;
             }
 
-            node.Attr.Color = _palette.SelectedStroke;
-            node.Attr.LineWidth = 3;
-            Invalidate(node);
+            if (_selectedNodes.Count > 1)
+            {
+                SetStat(SB_Selection, "Selected",
+                    $"{_selectedNodes.Count} projects  (Focus draws only these)");
+                return;
+            }
 
-            var project = GraphBuilder.ProjectOf(node);
+            var project = GraphBuilder.ProjectOf(_selected);
             if (project == null)
             {
-                SetStat(SB_Selection, "Selected", node.LabelText);
+                SetStat(SB_Selection, "Selected", _selected?.LabelText ?? string.Empty);
                 return;
             }
 

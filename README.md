@@ -19,6 +19,8 @@ whether a reference can be removed, or where a circular reference crept in.
 - [Getting around](#getting-around)
 - [Highlighting](#highlighting)
 - [Circular references](#circular-references)
+- [Options](#options)
+- [External references](#external-references)
 - [Exporting](#exporting)
 - [Themes](#themes)
 - [Building from source](#building-from-source)
@@ -88,6 +90,9 @@ Solution Explorer and press **Refresh** to rescan.
 | **Depth** | `All`, or 1–6 levels. Limit this on a large solution. |
 | **Fit** | Zoom so the whole graph fits the window. |
 | **Refresh** | Rescan the solution — after adding a project or changing references. |
+| **Focus** | Draw only the selected projects and the references between them. Ctrl+click nodes to select several. |
+| **Group** | Draw a box around each solution folder. |
+| **Legend** | Show what the colours mean. |
 | **Save As...** | Export this project's graph — see [Exporting](#exporting). |
 | **Save Solution Graph...** | Export *every* project in the solution, not just this one. |
 
@@ -100,6 +105,7 @@ The **Show** dropdown changes which references are drawn, not which projects:
 | **Deepest references only** | One arrow per project, from the deepest project that references it. Gives a clean tree — the quickest way to read the shape of a dependency chain. |
 | **All references** | Every reference of every project. The honest picture, and busier: a project referenced by four others gets four arrows. |
 | **Project references only** | Just the selected project and the things it references directly. Two levels, nothing transitive. |
+| **Referenced by (impact)** | Turned around: every project that depends on this one, directly or transitively. What breaks if you change it. Arrows still point at the dependency, so the project you asked about sits at the bottom. |
 
 On the sample solution above, the same seven projects give 6 connections under *Deepest* and
 12 under *All*.
@@ -118,6 +124,7 @@ project that was left out.
 | Click a node | Select it; the status bar shows its reference counts and project path |
 | Double-click a node | Re-root the graph on that project |
 | Right-click a node | Highlighting menu — see below |
+| Ctrl+click a node | Add it to the selection, for **Focus** |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save the graph as a PNG |
 
 ## Highlighting
@@ -154,6 +161,26 @@ DOT, SVG or PNG.
 
 Nodes are identified by the project's solution-relative path rather than its name, so two
 projects sharing a name in different solution folders stay separate in the exports.
+
+## Options
+
+**Tools → Options → DependencyGraph → General**:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| **View** | Deepest references only | Which view the window opens with. |
+| **Direction** | Top to bottom | Which direction it opens with. |
+| **Depth** | `0` | Depth limit on open. `0` means no limit. |
+| **Fit the graph to the window on open** | `false` | Off opens at 100%, which keeps the node text crisp. On fits the whole graph instead. |
+| **Node label font size** | `14` | Point size of the project names, 6 to 32. Nodes are sized around their label, so this scales the whole graph. |
+| **Excluded projects** | empty | Semicolon-separated name patterns to leave out, e.g. `*.Tests;*.Benchmarks`. `*` and `?` are supported, matching is case-insensitive, and the project you are looking at is never excluded. |
+| **Path to dot.exe** | empty | Full path to Graphviz's `dot.exe`. Leave empty to search the `PATH`. |
+
+## External references
+
+A project that is referenced but is not itself in the solution is drawn with a dashed border and
+labelled `(external)`, because its own references were never scanned — the graph below it is
+incomplete by definition.
 
 ## Themes
 

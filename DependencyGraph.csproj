@@ -68,6 +68,7 @@
     <Compile Include="UI\GraphBuilder.cs" />
     <Compile Include="UI\GraphPalette.cs" />
     <Compile Include="UI\ProjectChoice.cs" />
+    <Compile Include="State\Settings.cs" />
     <Compile Include="Scan\OutputHelper.cs" />
     <Compile Include="VSCommandTable.cs">
       <AutoGen>True</AutoGen>

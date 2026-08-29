@@ -63,11 +63,32 @@ namespace DependencyGraph.Scan
 
         #region Scanning
 
-        private void ExpandProjectsFolder(Project p, List<Project> pros)
+        /// <summary>
+        /// The solution folder a project sits in, or null for one at the solution root.
+        /// </summary>
+        /// <remarks>
+        /// Recorded while flattening, because the flattened project list on its own loses it and
+        /// the graph uses it to group nodes.
+        /// </remarks>
+        public string SolutionFolderOf(string projectKey)
+        {
+            return projectKey != null && _folders.TryGetValue(projectKey, out var folder)
+                ? folder
+                : null;
+        }
+
+        private readonly Dictionary<string, string> _folders = new Dictionary<string, string>();
+
+        private void ExpandProjectsFolder(Project p, List<Project> pros, string folder = null)
         {
             ThreadHelper.ThrowIfNotOnUIThread();
 
-            if (IsProject(p)) { pros.Add(p); return; }
+            if (IsProject(p))
+            {
+                pros.Add(p);
+                if (!string.IsNullOrEmpty(folder)) _folders[ProjectReferenceTree.KeyOf(p)] = folder;
+                return;
+            }
 
             // Solution folders nest, so recurse. ProjectItems can be absent for some kinds.
             ProjectItems items;
@@ -82,7 +103,9 @@ namespace DependencyGraph.Scan
                 catch { continue; }
                 if (sp == null) continue;
 
-                ExpandProjectsFolder(sp, pros);
+                // Solution folders nest, so build up a path like "Components/Data".
+                string nested = string.IsNullOrEmpty(folder) ? p.Name : folder + "/" + p.Name;
+                ExpandProjectsFolder(sp, pros, nested);
             }
         }
 

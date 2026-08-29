@@ -20,6 +20,11 @@ namespace DependencyGraph
     // MDI puts the graph in the document area in the middle, where it has room, rather than
     // tabbing it into the narrow Solution Explorer dock.
     [ProvideToolWindow(typeof(UI.DependencyGraphWindow.Pane), Style = VsDockStyle.MDI)]
+    // Tools -> Options -> DependencyGraph -> General. The matching ToolsOptionsPages entry has to
+    // be added to DependencyGraph.pkgdef by hand, since that file is checked in rather than
+    // generated - see the comments at the top of it.
+    [ProvideOptionPage(typeof(State.OptionsPage), "DependencyGraph", "General", 0, 0, true,
+        SupportsProfiles = true)]
     [Guid(PackageGuids.DependencyGraphString)]
     public sealed class DependencyGraphPackage : ToolkitPackage
     {

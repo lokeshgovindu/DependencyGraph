@@ -1,3 +1,5 @@
+using System;
+using System.Linq;
 using System.Collections.Generic;
 using DependencyGraph.Scan;
 using Microsoft.Msagl.Drawing;
@@ -7,9 +9,10 @@ namespace DependencyGraph.UI
     /// <summary>Which references are drawn as edges.</summary>
     public enum ConnectionsVisibility
     {
-        Deepest,    // one edge per project, from the deepest project that references it
-        All,        // every reference of every project
-        Project     // the selected project and its direct references only
+        Deepest,      // one edge per project, from the deepest project that references it
+        All,          // every reference of every project
+        Project,      // the selected project and its direct references only
+        ReferencedBy  // everything that depends on the project, directly or transitively
     }
 
     /// <summary>
@@ -20,11 +23,23 @@ namespace DependencyGraph.UI
     internal static class GraphBuilder
     {
         /// <summary>
-        /// Point size for node labels. MSAGL sizes each node around its label, so raising this
-        /// enlarges the whole graph proportionally - which is the point, since the view opens at
+        /// Point size for node labels, from the options page. MSAGL sizes each node around its
+        /// label, so this scales the whole graph - which is the point, since the view opens at
         /// 100% and the labels have to be readable at 1:1.
         /// </summary>
-        public const double LabelFontSize = 14;
+        public static double LabelFontSize
+        {
+            get
+            {
+                try { return Clamp(State.Settings.Instance.LabelFontSize, 6, 32); }
+                catch { return 14; }
+            }
+        }
+
+        private static double Clamp(double value, double min, double max)
+        {
+            return value < min ? min : (value > max ? max : value);
+        }
 
         /// <summary>
         /// Font for node labels.
@@ -43,8 +58,16 @@ namespace DependencyGraph.UI
         /// <summary>Value of <c>maxDepth</c> meaning "no limit".</summary>
         public const int UnlimitedDepth = int.MaxValue;
 
+        /// <param name="folderOf">
+        /// Optional lookup from project key to solution folder. When supplied, nodes are grouped
+        /// into a cluster per folder.
+        /// </param>
+        /// <param name="focusKeys">
+        /// When non-empty, only these projects are drawn, with the references between them.
+        /// </param>
         public static Graph Build(ProjectReferenceTree prt, ConnectionsVisibility visibility,
-            LayerDirection direction, GraphPalette palette, int maxDepth = UnlimitedDepth)
+            LayerDirection direction, GraphPalette palette, int maxDepth = UnlimitedDepth,
+            Func<string, string> folderOf = null, ICollection<string> focusKeys = null)
         {
             var graph = new Graph("dependencies");
 
@@ -55,8 +78,22 @@ namespace DependencyGraph.UI
             graph.Attr.OptimizeLabelPositions = true;
 
             // A deep solution graph is unreadable in one view, so only the requested number of
-            // levels is drawn.
-            var included = WithinDepth(prt, maxDepth);
+            // levels is drawn. The impact view is walked backwards, since its root is a sink.
+            var included = WithinDepth(prt, maxDepth,
+                backwards: visibility == ConnectionsVisibility.ReferencedBy);
+
+            ApplyExclusions(included, prt);
+
+            // Focus narrows the graph to a hand-picked set and the references between them,
+            // which is the way to get a readable picture out of a busy solution.
+            if (focusKeys != null && focusKeys.Count > 0)
+                included.RemoveWhere(p => !focusKeys.Contains(p.Key));
+
+            // One cluster per solution folder, created on demand. MSAGL lays clusters out as
+            // boxes around their members, which is what makes the grouping visible.
+            var subgraphs = new Dictionary<string, Subgraph>();
+            if (folderOf != null && graph.RootSubgraph == null)
+                graph.RootSubgraph = new Subgraph("root");
 
             foreach (var project in included)
             {
@@ -75,11 +112,41 @@ namespace DependencyGraph.UI
                 node.Attr.LabelMargin = LabelMargin;
 
                 bool isRoot = project.DepthLevel == 0;
+
+                // A project referenced from outside the solution is drawn dashed, so it is
+                // obvious the graph below it is incomplete - its own references were never
+                // scanned, because it is not in the solution to scan.
+                if (!isRoot && project.IsExternal)
+                {
+                    node.Attr.AddStyle(Microsoft.Msagl.Drawing.Style.Dashed);
+                    node.LabelText = project.ProjectName + "  (external)";
+                }
+
                 node.Attr.FillColor  = isRoot ? palette.RootFill : palette.NodeFill;
                 node.Attr.Color      = isRoot ? palette.RootStroke : palette.NodeStroke;
                 node.Label.FontColor = isRoot ? palette.RootText : palette.NodeText;
                 node.Label.FontName  = LabelFontName;
                 node.Label.FontSize  = LabelFontSize;
+
+                if (folderOf == null) continue;
+
+                string folder = folderOf(project.Key);
+                if (string.IsNullOrEmpty(folder)) continue;
+
+                if (!subgraphs.TryGetValue(folder, out var subgraph))
+                {
+                    subgraph = new Subgraph(folder) { LabelText = folder };
+                    subgraph.Attr.Color = palette.NodeStroke;
+                    subgraph.Attr.FillColor = palette.Background;
+                    subgraph.Label.FontColor = palette.StatLabel;
+                    subgraph.Label.FontName = LabelFontName;
+                    subgraph.Label.FontSize = LabelFontSize;
+
+                    subgraphs[folder] = subgraph;
+                    graph.RootSubgraph.AddSubgraph(subgraph);
+                }
+
+                subgraph.AddNode(node);
             }
 
             AddEdges(graph, included, visibility, palette);
@@ -97,10 +164,15 @@ namespace DependencyGraph.UI
         /// where App references Core directly and also through Services, Core has DepthLevel 2
         /// or more, and "depth 1" would have dropped a direct reference.
         /// </remarks>
-        private static HashSet<ProjectReferenceTree> WithinDepth(ProjectReferenceTree root, int maxDepth)
+        private static HashSet<ProjectReferenceTree> WithinDepth(ProjectReferenceTree root,
+            int maxDepth, bool backwards)
         {
             var within = new HashSet<ProjectReferenceTree> { root };
             if (maxDepth <= 0) return within;
+
+            // For the impact view the arrows point towards the root, so the hops have to be
+            // counted along the reverse edges.
+            var neighbours = backwards ? Referencers(root.AllPRTs) : null;
 
             var queue = new Queue<KeyValuePair<ProjectReferenceTree, int>>();
             queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(root, 0));
@@ -110,13 +182,75 @@ namespace DependencyGraph.UI
                 var current = queue.Dequeue();
                 if (current.Value >= maxDepth) continue;
 
-                foreach (var reference in current.Key.References)
-                    if (within.Add(reference))
+                IEnumerable<ProjectReferenceTree> next;
+                if (backwards)
+                    next = neighbours.TryGetValue(current.Key, out var list)
+                        ? (IEnumerable<ProjectReferenceTree>)list
+                        : new ProjectReferenceTree[0];
+                else
+                    next = current.Key.References;
+
+                foreach (var neighbour in next)
+                    if (within.Add(neighbour))
                         queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(
-                            reference, current.Value + 1));
+                            neighbour, current.Value + 1));
             }
 
             return within;
+        }
+
+        /// <summary>
+        /// Drops projects matching the "excluded projects" patterns from the set.
+        /// </summary>
+        /// <remarks>
+        /// Aimed at the noise on a large solution - test and benchmark projects usually reference
+        /// half of it and are rarely what you are looking at. The root is never excluded, since
+        /// excluding the project you asked about would leave an empty window.
+        /// </remarks>
+        private static void ApplyExclusions(HashSet<ProjectReferenceTree> included,
+            ProjectReferenceTree root)
+        {
+            string patterns;
+            try { patterns = State.Settings.Instance.ExcludedProjects; }
+            catch { return; }
+
+            if (string.IsNullOrWhiteSpace(patterns)) return;
+
+            var globs = patterns.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries)
+                                .Select(p => p.Trim())
+                                .Where(p => p.Length > 0)
+                                .ToList();
+            if (globs.Count == 0) return;
+
+            included.RemoveWhere(p => p != root && globs.Any(g => Matches(p.ProjectName, g)));
+        }
+
+        /// <summary>Case-insensitive match supporting <c>*</c> and <c>?</c>.</summary>
+        private static bool Matches(string name, string pattern)
+        {
+            string regex = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+                                     .Replace("\\*", ".*")
+                                     .Replace("\\?", ".") + "$";
+            return System.Text.RegularExpressions.Regex.IsMatch(name, regex,
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        }
+
+        /// <summary>Which projects reference each project, inverted from the reference edges.</summary>
+        private static Dictionary<ProjectReferenceTree, List<ProjectReferenceTree>> Referencers(
+            HashSet<ProjectReferenceTree> all)
+        {
+            var map = new Dictionary<ProjectReferenceTree, List<ProjectReferenceTree>>();
+            if (all == null) return map;
+
+            foreach (var project in all)
+                foreach (var reference in project.References)
+                {
+                    if (!map.TryGetValue(reference, out var list))
+                        map[reference] = list = new List<ProjectReferenceTree>();
+                    list.Add(project);
+                }
+
+            return map;
         }
 
         private static void AddEdges(Graph graph, HashSet<ProjectReferenceTree> included,
@@ -126,7 +260,10 @@ namespace DependencyGraph.UI
             // the root, so work that out once over the whole set rather than per edge.
             var backEdges = FindBackEdges(included);
 
-            if (visibility == ConnectionsVisibility.All)
+            // The impact view is a set of projects with the real edges between them, so every
+            // edge within the set is drawn - same as "all references".
+            if (visibility == ConnectionsVisibility.All
+                || visibility == ConnectionsVisibility.ReferencedBy)
             {
                 foreach (var project in included)
                     foreach (var reference in project.References)

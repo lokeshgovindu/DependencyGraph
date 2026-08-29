@@ -88,6 +88,15 @@
                     <Button x:Name="Btn_Refresh" Style="{StaticResource BarButton}"
                             ToolTip="Rescan the solution.">Refresh</Button>
 
+                    <ToggleButton x:Name="Btn_Focus" Height="23" Padding="9,0" Margin="0,0,4,0"
+                                  ToolTip="Draw only the selected projects. Ctrl+click nodes to select several.">Focus</ToggleButton>
+
+                    <ToggleButton x:Name="Btn_Group" Height="23" Padding="9,0" Margin="0,0,4,0"
+                                  ToolTip="Group projects into boxes by solution folder.">Group</ToggleButton>
+
+                    <ToggleButton x:Name="Btn_Legend" Height="23" Padding="9,0" Margin="0,0,4,0"
+                                  ToolTip="Show what the colours mean.">Legend</ToggleButton>
+
                     <Border x:Name="BarSeparator" Width="1" Margin="5,3" SnapsToDevicePixels="True"/>
 
                     <Button x:Name="Btn_SaveAs" Style="{StaticResource BarButton}"
@@ -100,6 +109,16 @@
 
         <!-- GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border. -->
         <Grid x:Name="GraphHost" Grid.Row="1" ClipToBounds="True"/>
+
+        <!-- Legend, overlaid on the graph so it costs no layout space when hidden. -->
+        <Border x:Name="LegendPanel"
+                Grid.Row="1"
+                Visibility="Collapsed"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="0,10,14,0" Padding="10,8"
+                BorderThickness="1" CornerRadius="3">
+            <StackPanel x:Name="LegendItems"/>
+        </Border>
 
         <TextBlock x:Name="EmptyMessage"
                    Grid.Row="1"

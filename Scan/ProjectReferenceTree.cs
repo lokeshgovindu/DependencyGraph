@@ -61,6 +61,12 @@ namespace DependencyGraph.Scan
             return project.Name;
         }
 
+        /// <summary>
+        /// True for a project that is referenced but is not itself in the solution, so its own
+        /// references were never scanned and the graph beneath it is incomplete.
+        /// </summary>
+        public bool IsExternal { get; set; }
+
         /// <summary>Projects this project references directly.</summary>
         private HashSet<ProjectReferenceTree> _references = new HashSet<ProjectReferenceTree>();
 
@@ -86,6 +92,104 @@ namespace DependencyGraph.Scan
         /// <summary>How many projects in this graph reference this one.</summary>
         public int ReferencedByCount =>
             AllPRTs == null ? 0 : AllPRTs.Count(p => p != this && p.References.Contains(this));
+
+        /// <summary>
+        /// Every project that reaches this one through references, directly or transitively, with
+        /// the real reference edges between them.
+        /// </summary>
+        /// <remarks>
+        /// The impact graph: what breaks if this project changes. Arrows keep their usual meaning
+        /// - they always point from the project that has the reference to the project it depends
+        /// on - so the root ends up as a sink, with the projects that depend on it above.
+        ///
+        /// This is the one view that cannot be built by walking outwards from the root, because
+        /// a project does not know who references it. It needs the whole solution's references
+        /// first, so the callers pass them in.
+        /// </remarks>
+        public static ProjectReferenceTree GetReferencedByTree(Project root, IList<Project> allProjects)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            // Direct references of every project in the solution, by key.
+            var projectsByKey = new Dictionary<string, Project>();
+            var referencesOf = new Dictionary<string, List<string>>();
+            var referencersOf = new Dictionary<string, List<string>>();
+            var inSolution = new HashSet<string>();
+
+            foreach (var project in allProjects)
+            {
+                string key = KeyOf(project);
+                projectsByKey[key] = project;
+                inSolution.Add(key);
+                if (!referencesOf.ContainsKey(key)) referencesOf[key] = new List<string>();
+
+                foreach (var reference in project.ProjectReferences())
+                {
+                    string refKey = KeyOf(reference);
+                    referencesOf[key].Add(refKey);
+
+                    if (!referencersOf.TryGetValue(refKey, out var list))
+                        referencersOf[refKey] = list = new List<string>();
+                    list.Add(key);
+
+                    // A referenced project can sit outside the solution's project list.
+                    if (!projectsByKey.ContainsKey(refKey)) projectsByKey[refKey] = reference;
+                }
+            }
+
+            // Walk the references backwards from the root to find everything that reaches it,
+            // recording how many hops away each one is.
+            string rootKey = KeyOf(root);
+            var hops = new Dictionary<string, int> { { rootKey, 0 } };
+            var queue = new Queue<string>();
+            queue.Enqueue(rootKey);
+
+            while (queue.Count > 0)
+            {
+                string current = queue.Dequeue();
+                if (!referencersOf.TryGetValue(current, out var referencers)) continue;
+
+                foreach (var referencer in referencers)
+                    if (!hops.ContainsKey(referencer))
+                    {
+                        hops[referencer] = hops[current] + 1;
+                        queue.Enqueue(referencer);
+                    }
+            }
+
+            // Build a node per project in that set.
+            var shared = new Dictionary<string, ProjectReferenceTree>();
+            var all = new HashSet<ProjectReferenceTree>();
+            var nodes = new Dictionary<string, ProjectReferenceTree>();
+
+            foreach (var pair in hops)
+            {
+                if (!projectsByKey.TryGetValue(pair.Key, out var project)) continue;
+
+                var node = new ProjectReferenceTree
+                {
+                    Item                = project,
+                    DepthLevel          = pair.Value,
+                    Proj2ProjRefTreeMap = shared,
+                    AllPRTs             = all,
+                    IsExternal          = !inSolution.Contains(pair.Key),
+                };
+                nodes[pair.Key] = node;
+                all.Add(node);
+            }
+
+            // Then the real reference edges, restricted to that set.
+            foreach (var node in nodes)
+            {
+                if (!referencesOf.TryGetValue(node.Key, out var references)) continue;
+
+                foreach (var refKey in references)
+                    if (nodes.TryGetValue(refKey, out var target) && target != node.Value)
+                        node.Value._references.Add(target);
+            }
+
+            return nodes.TryGetValue(rootKey, out var rootNode) ? rootNode : null;
+        }
 
         /// <summary>The selected project and its direct references only - a two level graph.</summary>
         public static ProjectReferenceTree GetProjectReferencesOnly(Project project)
@@ -229,6 +333,20 @@ namespace DependencyGraph.Scan
             foreach (var sr in References)
                 if (sr.Key == key) return sr;
             return null;
+        }
+
+        /// <summary>
+        /// Flags every node that is not one of the solution's own projects.
+        /// </summary>
+        /// <remarks>
+        /// The forward views follow references outwards and will happily walk into a project that
+        /// is referenced but not part of the solution, so which nodes are external can only be
+        /// decided by comparing against the solution's project list afterwards.
+        /// </remarks>
+        public void MarkExternals(IEnumerable<string> solutionKeys)
+        {
+            var inSolution = new HashSet<string>(solutionKeys);
+            foreach (var node in AllPRTs) node.IsExternal = !inSolution.Contains(node.Key);
         }
 
         /// <summary>Perform action on each node in the graph.</summary>

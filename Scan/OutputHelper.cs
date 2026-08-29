@@ -109,7 +109,7 @@ namespace DependencyGraph.Scan
                 {
                     p.StartInfo.UseShellExecute = false;
                     p.StartInfo.CreateNoWindow = true;
-                    p.StartInfo.FileName = "dot";
+                    p.StartInfo.FileName = FindGraphvizDot() ?? "dot";
                     p.StartInfo.Arguments = args;
                     p.Start();
                     p.WaitForExit();
@@ -142,10 +142,30 @@ namespace DependencyGraph.Scan
             return System.IO.Path.GetTempPath() + Guid.NewGuid().ToString() + "." + ext;
         }
 
+        /// <summary>
+        /// Graphviz's dot.exe, from the setting if one is configured, otherwise from the PATH.
+        /// Null when it cannot be found.
+        /// </summary>
+        /// <remarks>
+        /// The setting exists because getting dot.exe onto the PATH is the step people get wrong:
+        /// a reviewer reported installing Graphviz, verifying the PATH, and still seeing nothing.
+        /// Pointing straight at the executable removes that failure mode.
+        /// </remarks>
+        public static string FindGraphvizDot()
+        {
+            string configured = null;
+            try { configured = State.Settings.Instance.GraphvizDotPath; } catch { }
+
+            if (!string.IsNullOrWhiteSpace(configured))
+                return System.IO.File.Exists(configured) ? configured : null;
+
+            return FindOnPath("dot.exe");
+        }
+
         /// <summary>True when Graphviz's 'dot' can be found, so the SVG/PNG options are usable.</summary>
         public static bool IsGraphvizAvailable()
         {
-            return FindOnPath("dot.exe") != null;
+            return FindGraphvizDot() != null;
         }
 
         public static string FindOnPath(string fileName)
