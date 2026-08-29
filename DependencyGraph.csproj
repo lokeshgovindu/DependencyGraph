@@ -66,6 +66,7 @@
     </Compile>
     <Compile Include="UI\DependencyGraphWindow.cs" />
     <Compile Include="UI\GraphBuilder.cs" />
+    <Compile Include="UI\GraphDrag.cs" />
     <Compile Include="UI\GraphPalette.cs" />
     <Compile Include="UI\ProjectChoice.cs" />
     <Compile Include="State\Settings.cs" />

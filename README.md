@@ -19,13 +19,16 @@ whether a reference can be removed, or where a circular reference crept in.
 - [Getting around](#getting-around)
 - [Highlighting](#highlighting)
 - [Circular references](#circular-references)
-- [Options](#options)
-- [External references](#external-references)
 - [Exporting](#exporting)
+- [Options](#options)
+- [Grouping by solution folder](#grouping-by-solution-folder)
+- [External references](#external-references)
+- [When the solution changes](#when-the-solution-changes)
 - [Themes](#themes)
 - [Building from source](#building-from-source)
 - [How it works](#how-it-works)
 - [Project layout](#project-layout)
+- [Tests](#tests)
 - [Known limitations](#known-limitations)
 
 ## What you see
@@ -91,7 +94,7 @@ Solution Explorer and press **Refresh** to rescan.
 | **Fit** | Zoom so the whole graph fits the window. |
 | **Refresh** | Rescan the solution — after adding a project or changing references. |
 | **Focus** | Draw only the selected projects and the references between them. Ctrl+click nodes to select several. |
-| **Group** | Draw a box around each solution folder. |
+| **Group** | Draw a box around each solution folder, named after it. Click the chevron on a box to fold that folder down to one shape. |
 | **Legend** | Show what the colours mean. |
 | **Save As...** | Export this project's graph — see [Exporting](#exporting). |
 | **Save Solution Graph...** | Export *every* project in the solution, not just this one. |
@@ -119,6 +122,8 @@ project that was left out.
 | Action | Result |
 | --- | --- |
 | Drag the background | Pan |
+| Drag a node | Move it. Its references follow it, and nothing else shifts. |
+| Drag a folder box | Move the whole group - the box, the projects in it and their references. |
 | Mouse wheel | Zoom |
 | **Fit** | Fit the graph to the window |
 | Click a node | Select it; the status bar shows its reference counts and project path |
@@ -176,11 +181,35 @@ projects sharing a name in different solution folders stay separate in the expor
 | **Excluded projects** | empty | Semicolon-separated name patterns to leave out, e.g. `*.Tests;*.Benchmarks`. `*` and `?` are supported, matching is case-insensitive, and the project you are looking at is never excluded. |
 | **Path to dot.exe** | empty | Full path to Graphviz's `dot.exe`. Leave empty to search the `PATH`. |
 
+## Grouping by solution folder
+
+**Group** draws a box around the projects in each solution folder, with the folder's name in a
+band across the top of the box. Nested folders nest their boxes. A project that is not in any
+solution folder is drawn on its own, outside every box.
+
+Clicking the chevron beside a folder's name collapses it: the whole folder becomes one node
+labelled with its name and the number of projects in it, and every reference into or out of the
+folder is redrawn against that node. Click the collapsed node to expand it again. On a solution
+with a few hundred projects this is the fastest way to something readable.
+
+![Grouping and the legend](docs/grouped-and-legend.png)
+
+And with `Components` collapsed to a single node:
+
+![A collapsed solution folder](docs/collapsed-folder.png)
+
 ## External references
 
 A project that is referenced but is not itself in the solution is drawn with a dashed border and
 labelled `(external)`, because its own references were never scanned — the graph below it is
 incomplete by definition.
+
+## When the solution changes
+
+The window follows the IDE. Close the solution and it empties itself; open another and it
+rescans and roots on the new solution's startup project. Adding or removing a project while the
+window is open updates it too. **Refresh** is there for the case the extension cannot see —
+editing a project's references outside the IDE.
 
 ## Themes
 
@@ -267,6 +296,26 @@ out.
 | `Scan\OutputHelper.cs` | DGML and Graphviz export, and shelling out to `dot`. |
 | `VSCommandTable.vsct` | Menu placement for the command. |
 | `DependencyGraph.pkgdef` | Checked-in package definition — see [above](#the-checked-in-pkgdef). |
+| `Tests` | The checks — see [below](#tests). |
+
+## Tests
+
+```
+powershell -ExecutionPolicy Bypass -File Testsun-checks.ps1
+```
+
+Build the extension first; the checks run against `binDebugDependencyGraph.dll`.
+
+`TestsGraphChecks.cs` is a console app rather than a unit-test project on purpose. The code it
+exercises needs a real MSAGL `GraphViewer` in a WPF visual tree, so it hosts one offscreen, lays
+real graphs out and renders them to PNG. It drives the shipped assembly by reflection, so the
+checks cannot drift into testing a copy of the logic. It covers layout direction, the depth
+limit, cycle detection, the impact view, folder boxes and their names, collapse and expand, and
+dragging.
+
+`TestsContrastCheck.ps1` reads the palettes out of the built assembly and checks every
+text-on-background pairing against WCAG AA, in both themes. `TestsMakeDemoSolution.ps1` writes
+the throwaway solution the screenshots use.
 
 ## Known limitations
 
@@ -276,9 +325,11 @@ out.
   correct but wordy.
 - DGML and DOT exports of the *whole solution* include references to projects outside the
   solution as extra nodes.
-- Very large solutions are still large. Use **Depth** and **Deepest references only** together.
-
----
-
-The screenshots under `Screenshots/` predate the MSAGL rewrite and show the old
-NodeNetwork-based window.
+- Very large solutions are still large. Use **Depth**, **Group** with folders collapsed, and
+  **Deepest references only** together.
+- A node you dragged goes back where the layout puts it on the next rebuild - changing view,
+  direction, depth or project, or pressing **Refresh**. Positions are not saved.
+- References redrawn after a drag are straight lines rather than routed splines, so a dragged
+  node's arrows can cross a box they would otherwise have gone around.
+- Collapsing a folder aggregates its references onto one node, so the connection count drops:
+  several references between the same pair of boxes become one arrow.

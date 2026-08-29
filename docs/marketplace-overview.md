@@ -8,41 +8,52 @@ whether a reference can be removed, or where a circular reference crept in.
 
 ![The tool window](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/tool-window.png)
 
-## No setup needed
+## Works in Community and Professional
 
-**You do not need Graphviz, and you do not need the DGML editor.** The graph is drawn in the
-IDE. Graphviz is only involved if you explicitly pick the Graphviz SVG or PNG export.
+Visual Studio's built-in Code Map needs the **Enterprise** edition to create or edit a graph —
+Community and Professional can only open one someone else made. This does the job in any edition.
+
+**No setup either.** You do not need Graphviz, and you do not need the DGML editor. The graph is
+drawn in the IDE. Graphviz is only involved if you explicitly pick the Graphviz SVG or PNG
+export.
 
 Open it from **Tools → Show Dependency Graph**, or right-click a project in Solution Explorer.
 The window docks in the document area and the rest of the IDE stays usable while it is open.
 
 ## What you see
 
-One box per project, one arrow per reference, pointing from the project that has the reference
-to the project it depends on. The project you are looking at is the root, in olive green.
+One box per project, one arrow per reference, pointing from the project that has the reference to
+the project it depends on. The project you are looking at is the root, in olive green.
 
-The graph opens at 100% zoom so the labels stay crisp; **Fit** puts the whole graph in view.
-The status bar shows the node and connection counts, the current zoom, and the selected
-project's reference counts.
+The graph opens at 100% zoom so the labels stay crisp; **Fit** puts the whole graph in view. The
+status bar shows the node and connection counts, the current zoom, and the selected project's
+reference counts and path.
 
-## Three views
+## Four views
 
 - **Deepest references only** — one arrow per project, giving a clean tree. The quickest way to
   read the shape of a dependency chain.
 - **All references** — every reference of every project. The honest picture, and busier.
 - **Project references only** — the selected project and its direct references, nothing
   transitive.
+- **Referenced by (impact)** — turned around: everything that depends on this project, directly
+  or transitively. The "what breaks if I change this?" view.
 
-Plus a **Depth** limit of 1–6 levels for large solutions, and four layout **Directions**: top to
-bottom, left to right, bottom to top, right to left.
+![The impact view](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/impact-view.png)
 
-## Getting around
+## Finding your way around a big solution
 
-Drag to pan, wheel to zoom. Click a node to select it. Double-click to re-root the graph on that
-project. Right-click for highlighting:
+Three levers, which matter once a solution runs to hundreds of projects:
 
-- everything that **references** this project — what breaks if you change it
-- everything this project **references** directly
+- **Depth** — stop after 1 to 6 levels of references.
+- **Focus** — Ctrl+click several projects, then draw only those and the references between them.
+- **Group** — draw a box around each solution folder, with the folder's name across the top.
+
+![Grouping and the legend](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/grouped-and-legend.png)
+
+Plus an **Excluded projects** setting for the test and benchmark projects that reference half the
+solution, and four layout **Directions**: top to bottom, left to right, bottom to top, right to
+left.
 
 ## Circular references
 
@@ -50,12 +61,23 @@ A reference that closes a cycle is drawn in red and labelled. Visual Studio will
 create one through the UI, but a hand-edited project file can, and the build error does not name
 the projects involved. This points straight at them.
 
+## Getting around
+
+Drag to pan, wheel to zoom. Click a node to select it. Double-click to re-root the graph on that
+project. Right-click for highlighting — everything that **references** this project, or
+everything it **references** directly.
+
 ## Exporting
 
 Save the graph on screen as **PNG** (the whole graph, not just the visible part), **DGML** for
-Visual Studio's directed-graph editor, or **Graphviz DOT**. If `dot.exe` is on your `PATH`,
-Graphviz **SVG** and **PNG** are offered too. **Save Solution Graph** does the same for every
-project in the solution at once.
+Visual Studio's directed-graph editor, or **Graphviz DOT**. If Graphviz is available, **SVG** and
+**PNG** through `dot` too. **Save Solution Graph** does the same for every project at once.
+
+## Settings
+
+**Tools → Options → DependencyGraph → General**: the view, direction and depth the window opens
+with, node label font size, excluded project patterns, and a direct path to `dot.exe` if you
+would rather not put Graphviz on your `PATH`.
 
 ## Themes
 

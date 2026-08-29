@@ -65,9 +65,14 @@ namespace DependencyGraph.UI
         /// <param name="focusKeys">
         /// When non-empty, only these projects are drawn, with the references between them.
         /// </param>
+        /// <param name="collapsedFolders">
+        /// Solution folders drawn as a single node standing in for everything inside them, with
+        /// the references of their projects aggregated onto it.
+        /// </param>
         public static Graph Build(ProjectReferenceTree prt, ConnectionsVisibility visibility,
             LayerDirection direction, GraphPalette palette, int maxDepth = UnlimitedDepth,
-            Func<string, string> folderOf = null, ICollection<string> focusKeys = null)
+            Func<string, string> folderOf = null, ICollection<string> focusKeys = null,
+            ICollection<string> collapsedFolders = null)
         {
             var graph = new Graph("dependencies");
 
@@ -95,8 +100,38 @@ namespace DependencyGraph.UI
             if (folderOf != null && graph.RootSubgraph == null)
                 graph.RootSubgraph = new Subgraph("root");
 
+            // A collapsed folder is not drawn as a box with its projects inside it; the whole
+            // folder becomes one node, and every reference into or out of the folder is redrawn
+            // against that node. Which project inside it held the reference stops mattering, so
+            // the counts here are only for the label.
+            var collapsed = CollapsedFolders(included, folderOf, collapsedFolders);
+            var idOf = NodeIdMap(included, folderOf, collapsed);
+
+            foreach (var folder in collapsed)
+            {
+                var folderNode = graph.AddNode(FolderNodePrefix + folder.Key);
+                folderNode.LabelText = folder.Key + "   (" + folder.Value
+                    + (folder.Value == 1 ? " project)" : " projects)");
+
+                folderNode.Attr.Shape     = Shape.Box;
+                folderNode.Attr.XRadius   = 3;
+                folderNode.Attr.YRadius   = 3;
+                folderNode.Attr.LineWidth = 2;
+                folderNode.Attr.Padding   = 3;
+                folderNode.Attr.LabelMargin = LabelMargin;
+                folderNode.Attr.FillColor  = palette.Background;
+                folderNode.Attr.Color      = palette.NodeStroke;
+                folderNode.Label.FontColor = palette.NodeText;
+                folderNode.Label.FontName  = LabelFontName;
+                folderNode.Label.FontSize  = LabelFontSize;
+            }
+
             foreach (var project in included)
             {
+                // A project inside a collapsed folder has no node of its own - the folder's node
+                // stands in for it.
+                if (folderOf != null && collapsed.ContainsKey(folderOf(project.Key) ?? "")) continue;
+
                 // Node id is the project's stable key, not its name: two projects in different
                 // solution folders can share a name, and using the name merged them into one
                 // node. The name is only the label.
@@ -141,6 +176,19 @@ namespace DependencyGraph.UI
                     subgraph.Label.FontColor = palette.StatLabel;
                     subgraph.Label.FontName = LabelFontName;
                     subgraph.Label.FontSize = LabelFontSize;
+                    MeasureLabel(subgraph.Label);
+
+                    // The band across the top of the box, which the folder name is drawn in, is
+                    // sized from the collapse button rather than from the label, so the button's
+                    // diameter is what reserves room for the name. The button is worth keeping:
+                    // the viewer wires it up, so clicking it folds the group down to a single box.
+                    //
+                    // Only the button's filled disc takes these colours - the chevron drawn on
+                    // top of it keeps its own stroke - so the disc is left transparent until the
+                    // pointer is over it, rather than sitting on the box corner as a grey blob.
+                    subgraph.DiameterOfOpenCollapseButton = subgraph.Label.Height;
+                    subgraph.CollapseButtonColorInactive  = Color.Transparent;
+                    subgraph.CollapseButtonColorActive    = palette.StatValue;
 
                     subgraphs[folder] = subgraph;
                     graph.RootSubgraph.AddSubgraph(subgraph);
@@ -149,8 +197,205 @@ namespace DependencyGraph.UI
                 subgraph.AddNode(node);
             }
 
-            AddEdges(graph, included, visibility, palette);
+            AddEdges(graph, included, visibility, palette, idOf);
             return graph;
+        }
+
+        /// <summary>Node id prefix marking a node that stands in for a whole solution folder.</summary>
+        private const string FolderNodePrefix = "folder:";
+
+        /// <summary>
+        /// The solution folder a node stands in for, or null for an ordinary project node.
+        /// </summary>
+        public static string CollapsedFolderOf(Node node)
+        {
+            return node != null && node.Id != null && node.Id.StartsWith(FolderNodePrefix,
+                       StringComparison.Ordinal)
+                ? node.Id.Substring(FolderNodePrefix.Length)
+                : null;
+        }
+
+        /// <summary>Which of the collapsed folders are actually in this graph, and how big.</summary>
+        private static Dictionary<string, int> CollapsedFolders(
+            HashSet<ProjectReferenceTree> included, Func<string, string> folderOf,
+            ICollection<string> collapsedFolders)
+        {
+            var counts = new Dictionary<string, int>();
+            if (folderOf == null || collapsedFolders == null || collapsedFolders.Count == 0)
+                return counts;
+
+            foreach (var project in included)
+            {
+                string folder = folderOf(project.Key);
+                if (string.IsNullOrEmpty(folder) || !collapsedFolders.Contains(folder)) continue;
+
+                counts.TryGetValue(folder, out int n);
+                counts[folder] = n + 1;
+            }
+
+            return counts;
+        }
+
+        /// <summary>
+        /// Which node each project's edges attach to: its own, or its collapsed folder's.
+        /// </summary>
+        private static Dictionary<string, string> NodeIdMap(HashSet<ProjectReferenceTree> included,
+            Func<string, string> folderOf, Dictionary<string, int> collapsed)
+        {
+            var map = new Dictionary<string, string>();
+            foreach (var project in included)
+            {
+                string folder = folderOf == null ? null : folderOf(project.Key);
+                map[project.Key] = folder != null && collapsed.ContainsKey(folder)
+                    ? FolderNodePrefix + folder
+                    : project.Key;
+            }
+
+            return map;
+        }
+
+        /// <summary>
+        /// Gives every folder box a text element for its name.
+        /// </summary>
+        /// <remarks>
+        /// Must be called before the graph is handed to the viewer. The viewer builds a text
+        /// element for each ordinary node on its way to measuring that node's boundary, but a
+        /// cluster's boundary comes from cluster layout instead, so a subgraph never gets one and
+        /// its name is silently dropped. RegisterLabelCreator is the supported way to supply one.
+        /// </remarks>
+        public static FolderNames RegisterSubgraphLabels(Graph graph,
+            Microsoft.Msagl.WpfGraphControl.GraphViewer viewer)
+        {
+            var names = new FolderNames();
+            if (graph?.RootSubgraph == null || viewer == null) return names;
+
+            foreach (var subgraph in graph.RootSubgraph.AllSubgraphsDepthFirstExcludingSelf())
+            {
+                var owner = subgraph;
+                if (string.IsNullOrEmpty(owner.LabelText)) continue;
+
+                viewer.RegisterLabelCreator(owner, _ =>
+                {
+                    var element = FolderNameElement(owner.Label);
+                    names.Elements[owner] = element;
+                    return element;
+                });
+                names.Owners.Add(owner);
+            }
+
+            return names;
+        }
+
+        private static System.Windows.Controls.TextBlock FolderNameElement(Label label)
+        {
+            var text = new System.Windows.Controls.TextBlock
+            {
+                Text       = label.Text,
+                FontFamily = new System.Windows.Media.FontFamily(label.FontName),
+                FontSize   = label.FontSize,
+                Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(
+                        label.FontColor.R, label.FontColor.G, label.FontColor.B)),
+            };
+
+            // The viewer positions the element from its own size, which is only known once it has
+            // been measured.
+            text.Measure(new System.Windows.Size(double.PositiveInfinity, double.PositiveInfinity));
+            text.Width  = text.DesiredSize.Width;
+            text.Height = text.DesiredSize.Height;
+
+            return text;
+        }
+
+        /// <summary>
+        /// The folder-name elements on the current graph: what was registered with the viewer, and
+        /// where each name has to sit.
+        /// </summary>
+        public sealed class FolderNames
+        {
+            internal readonly List<Subgraph> Owners = new List<Subgraph>();
+
+            internal readonly Dictionary<Subgraph, System.Windows.Controls.TextBlock> Elements =
+                new Dictionary<Subgraph, System.Windows.Controls.TextBlock>();
+
+            /// <summary>Drops these registrations, for a rebuild that replaces them.</summary>
+            public void Unregister(Microsoft.Msagl.WpfGraphControl.GraphViewer viewer)
+            {
+                if (viewer == null) return;
+                foreach (var owner in Owners) viewer.UnregisterLabelCreator(owner);
+                Owners.Clear();
+                Elements.Clear();
+            }
+
+            /// <summary>
+            /// Moves each folder name from the middle of its box up into the box's top band. Call
+            /// after the graph has been laid out.
+            /// </summary>
+            /// <remarks>
+            /// The viewer centres a node's label on the node, which for a box the size of a whole
+            /// group drops the folder name across the middle of its own contents. Positioning is a
+            /// RenderTransform rather than Canvas.Left/Top, and it carries MSAGL's y flip - hence
+            /// the (1,0,0,-1) matrix, and why the y offset is measured to the label's bottom.
+            /// </remarks>
+            public void Reposition()
+            {
+                foreach (var pair in Elements)
+                {
+                    var cluster = pair.Key.GeometryNode as Microsoft.Msagl.Core.Layout.Cluster;
+                    if (cluster == null) continue;
+
+                    var element = pair.Value;
+                    var box = cluster.BoundingBox;
+
+                    double band = cluster.RectangularBoundary?.TopMargin ?? element.Height;
+                    double centreY = box.Top - band / 2;
+
+                    double x = box.Center.X - element.Width / 2;
+                    double y = centreY + element.Height / 2;
+
+                    // Called from LayoutUpdated, so it has to be quiet when nothing has moved -
+                    // handing WPF a new transform on every layout pass would keep the canvas
+                    // redrawing for no reason.
+                    var current = element.RenderTransform?.Value ?? default(System.Windows.Media.Matrix);
+                    if (Close(current.OffsetX, x) && Close(current.OffsetY, y) && current.M22 < 0)
+                        continue;
+
+                    element.RenderTransform = new System.Windows.Media.MatrixTransform(1, 0, 0, -1, x, y);
+                }
+            }
+
+            private static bool Close(double a, double b)
+            {
+                return Math.Abs(a - b) < 0.01;
+            }
+        }
+
+        /// <summary>
+        /// Fills in a label's width and height by measuring its text.
+        /// </summary>
+        /// <remarks>
+        /// Needed for cluster labels and only for those. MSAGL reserves the top margin a cluster
+        /// draws its name in from the label's size, and the WPF viewer creates the text element
+        /// only when there is a margin to put it in - but nothing in the pipeline measures a
+        /// cluster label the way node labels get measured on the way to a node boundary. Left
+        /// unmeasured the size stays 0x0, and the group box comes out as an unlabelled rectangle.
+        /// </remarks>
+        private static void MeasureLabel(Label label)
+        {
+            if (label == null || string.IsNullOrEmpty(label.Text)) return;
+
+            var typeface = new System.Windows.Media.Typeface(label.FontName);
+            var measured = new System.Windows.Media.FormattedText(
+                label.Text,
+                System.Globalization.CultureInfo.CurrentUICulture,
+                System.Windows.FlowDirection.LeftToRight,
+                typeface,
+                label.FontSize,
+                System.Windows.Media.Brushes.Black,
+                1.0);
+
+            label.Width  = measured.Width + 2 * LabelMargin;
+            label.Height = measured.Height + LabelMargin;
         }
 
         /// <summary>
@@ -254,11 +499,27 @@ namespace DependencyGraph.UI
         }
 
         private static void AddEdges(Graph graph, HashSet<ProjectReferenceTree> included,
-            ConnectionsVisibility visibility, GraphPalette palette)
+            ConnectionsVisibility visibility, GraphPalette palette,
+            Dictionary<string, string> idOf)
         {
             // A reference is only a cycle if it points back at something already on the path from
             // the root, so work that out once over the whole set rather than per edge.
             var backEdges = FindBackEdges(included);
+
+            // With a folder collapsed, several references can land on the same pair of nodes, and
+            // references between two projects inside it become one node pointing at itself.
+            var drawn = new HashSet<(string, string)>();
+
+            void Add(ProjectReferenceTree from, ProjectReferenceTree to)
+            {
+                string fromId = idOf.TryGetValue(from.Key, out var f) ? f : from.Key;
+                string toId   = idOf.TryGetValue(to.Key,   out var t) ? t : to.Key;
+
+                if (fromId == toId) return;
+                if (!drawn.Add((fromId, toId))) return;
+
+                Style(graph.AddEdge(fromId, toId), palette, backEdges.Contains((from, to)));
+            }
 
             // The impact view is a set of projects with the real edges between them, so every
             // edge within the set is drawn - same as "all references".
@@ -270,8 +531,7 @@ namespace DependencyGraph.UI
                     {
                         // Skip edges into levels that were cut by the depth limit.
                         if (!included.Contains(reference)) continue;
-                        Style(graph.AddEdge(project.Key, reference.Key), palette,
-                            backEdges.Contains((project, reference)));
+                        Add(project, reference);
                     }
 
                 return;
@@ -285,8 +545,7 @@ namespace DependencyGraph.UI
                 if (referencedBy == null || referencedBy == project) continue;
                 if (!included.Contains(referencedBy)) continue;
 
-                Style(graph.AddEdge(referencedBy.Key, project.Key), palette,
-                    backEdges.Contains((referencedBy, project)));
+                Add(referencedBy, project);
             }
         }
 

@@ -60,6 +60,9 @@ namespace DependencyGraph.UI
         /// <summary>Whether the current graph has already been framed to the window.</summary>
         private bool _hasBeenFitted;
 
+        /// <summary>The folder-name elements drawn on the current graph.</summary>
+        private GraphBuilder.FolderNames _folderNames = new GraphBuilder.FolderNames();
+
         private System.Windows.Media.Brush _statLabelBrush;
         private System.Windows.Media.Brush _statValueBrush;
 
@@ -79,13 +82,20 @@ namespace DependencyGraph.UI
             // re-subscribing left theme tracking dead for the rest of the session. ThemeChanged
             // is also a static event, so staying subscribed after unload would keep this control
             // alive.
-            Loaded   += (s, e) => SubscribeToThemeChanges(true);
-            Unloaded += (s, e) => SubscribeToThemeChanges(false);
+            Loaded   += (s, e) => { SubscribeToThemeChanges(true);  SubscribeToSolutionEvents(true); };
+            Unloaded += (s, e) => { SubscribeToThemeChanges(false); SubscribeToSolutionEvents(false); };
 
+            // MSAGL's own layout editor (LayoutEditingEnabled) is what would normally provide
+            // dragging, and it must stay off: enabling it made the first drag take the whole IDE
+            // down - process gone, no exception dialog, nothing in the activity log or in Windows
+            // Error Reporting. Reproduced twice, with and without grouping. Dragging is done here
+            // instead, in Viewer_MouseMove, which is a few lines and cannot do that.
             _viewer.LayoutEditingEnabled = false;
             _viewer.RunLayoutAsync = false;
             _viewer.BindToPanel(GraphHost);
             _viewer.MouseDown += Viewer_MouseDown;
+            _viewer.MouseMove += Viewer_MouseMove;
+            _viewer.MouseUp   += Viewer_MouseUp;
             _viewer.ViewChangeEvent += (s, e) => UpdateZoomIndicator();
             GraphHost.SizeChanged += GraphHost_SizeChanged;
 
@@ -97,7 +107,7 @@ namespace DependencyGraph.UI
             Btn_Focus.Checked           += (s, e) => ApplyFocus();
             Btn_Focus.Unchecked         += (s, e) => { _focusKeys.Clear(); Rebuild(); };
             Btn_Group.Checked           += (s, e) => Rebuild();
-            Btn_Group.Unchecked         += (s, e) => Rebuild();
+            Btn_Group.Unchecked         += (s, e) => { _collapsedFolders.Clear(); Rebuild(); };
             Btn_Legend.Checked          += (s, e) => LegendPanel.Visibility = Visibility.Visible;
             Btn_Legend.Unchecked        += (s, e) => LegendPanel.Visibility = Visibility.Collapsed;
             Btn_SaveAs.Click            += Btn_SaveAs_Click;
@@ -188,6 +198,8 @@ namespace DependencyGraph.UI
             AddLegendRow(_palette.ReferencingFill, _palette.NodeStroke, "References the selection");
             AddLegendRow(_palette.ReferencedFill, _palette.NodeStroke, "Referenced by the selection");
             AddLegendRow(_palette.NodeFill, _palette.SelectedStroke, "Selected");
+            AddLegendRow(_palette.Background, _palette.NodeStroke,
+                "A collapsed solution folder  (click it to expand)");
             AddLegendLine(_palette.Edge, "References  (arrow points at the dependency)");
             AddLegendLine(_palette.CycleEdge, "Circular reference");
         }
@@ -231,6 +243,96 @@ namespace DependencyGraph.UI
                 VerticalAlignment = VerticalAlignment.Center,
             });
             LegendItems.Children.Add(row);
+        }
+
+        /// <summary>Whether this control is currently listening for solution changes.</summary>
+        private bool _listeningForSolutionEvents;
+
+        /// <summary>
+        /// Keeps the window in step with the IDE as solutions and projects come and go.
+        /// </summary>
+        /// <remarks>
+        /// A tool window outlives the solution it scanned. Without this it went on showing the
+        /// old graph after the solution closed - built on EnvDTE.Project objects that no longer
+        /// refer to anything, so clicking a node could throw - and a newly opened solution was
+        /// not picked up until Refresh was pressed.
+        /// </remarks>
+        private void SubscribeToSolutionEvents(bool subscribe)
+        {
+            if (subscribe == _listeningForSolutionEvents) return;
+
+            var events = Community.VisualStudio.Toolkit.VS.Events.SolutionEvents;
+            if (subscribe)
+            {
+                events.OnAfterOpenSolution  += OnSolutionOpened;
+                events.OnAfterCloseSolution += OnSolutionClosed;
+                events.OnAfterOpenProject   += OnProjectSetChanged;
+                events.OnAfterRenameProject += OnProjectSetChanged;
+                events.OnBeforeCloseProject += OnProjectSetChanged;
+            }
+            else
+            {
+                events.OnAfterOpenSolution  -= OnSolutionOpened;
+                events.OnAfterCloseSolution -= OnSolutionClosed;
+                events.OnAfterOpenProject   -= OnProjectSetChanged;
+                events.OnAfterRenameProject -= OnProjectSetChanged;
+                events.OnBeforeCloseProject -= OnProjectSetChanged;
+            }
+
+            _listeningForSolutionEvents = subscribe;
+        }
+
+        private void OnSolutionOpened(Community.VisualStudio.Toolkit.Solution solution)
+        {
+            // The picker and the graph both belong to the previous solution.
+            ForgetSolution();
+            Rescan();
+        }
+
+        private void OnSolutionClosed()
+        {
+            ForgetSolution();
+            ShowEmptyMessage("Open a solution to see its project dependency graph.");
+        }
+
+        /// <summary>
+        /// A project was added, removed or renamed. Rescanning keeps the picker honest.
+        /// </summary>
+        /// <remarks>
+        /// Deferred to the dispatcher because these fire while the shell is still applying the
+        /// change, and scanning mid-flight can see a half-updated solution.
+        /// </remarks>
+        private void OnProjectSetChanged(Community.VisualStudio.Toolkit.Project project)
+        {
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (_dte == null) return;
+                ForgetSolution();
+                Rescan();
+            }), System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+        }
+
+        /// <summary>Drops everything tied to the solution that was open.</summary>
+        private void ForgetSolution()
+        {
+            _vsScanner = null;
+            _prt = null;
+            _graph = null;
+            _selected = null;
+            _selectedNodes.Clear();
+            _focusKeys.Clear();
+            _collapsedFolders.Clear();
+            _visuals = null;
+            _edgeVisuals = null;
+            _dragging = null;
+            _hasBeenFitted = false;
+
+            _loading = true;
+            CBProjectNames.Items.Clear();
+            _loading = false;
+
+            // Dropping the graph clears the canvas; without it the old drawing stays on screen.
+            try { _viewer.Graph = null; } catch { }
         }
 
         /// <summary>Whether this control is currently listening for theme changes.</summary>
@@ -328,7 +430,8 @@ namespace DependencyGraph.UI
         }
 
         /// <summary>
-        /// Frames the graph at 100% zoom, centred on the project being examined.
+        /// Frames the graph at 100% zoom - centred on the graph when it fits, on the project
+        /// being examined when it does not.
         /// </summary>
         /// <remarks>
         /// Deliberately not fit-to-window for the initial view: fitting scales the graph up to
@@ -353,8 +456,18 @@ namespace DependencyGraph.UI
             var anchor = _graph.Nodes.FirstOrDefault(n => GraphBuilder.ProjectOf(n)?.DepthLevel == 0)
                       ?? _graph.Nodes.FirstOrDefault();
 
-            if (anchor?.GeometryNode != null) _viewer.NodeToCenterWithScale(anchor, 1.0);
-            else _viewer.SetInitialTransform();
+            if (anchor?.GeometryNode == null) { _viewer.SetInitialTransform(); UpdateZoomIndicator(); return; }
+
+            _viewer.NodeToCenterWithScale(anchor, 1.0);
+
+            // Centring on the root pushes the rest of the tree off to one side, which on a graph
+            // that would have fitted anyway just wastes the window. So when the whole graph fits
+            // at 1:1, centre the graph instead. A graph too big to fit keeps the root centred,
+            // because then landing on the project you asked about is the useful thing.
+            var box = _graph.BoundingBox;
+            var viewport = _viewer.ClientViewportMappedToGraph;
+            if (box.Width <= viewport.Width && box.Height <= viewport.Height)
+                _viewer.PointToCenter(box.Center);
 
             UpdateZoomIndicator();
         }
@@ -569,10 +682,21 @@ namespace DependencyGraph.UI
             _selected = null;
             _selectedNodes.Clear();
             _visuals = null;
+            _edgeVisuals = null;
+            _dragging = null;
             _graph = GraphBuilder.Build(_prt, visibility, SelectedDirection, _palette, SelectedDepth,
                 folderOf: Btn_Group.IsChecked == true ? (Func<string, string>)_vsScanner.SolutionFolderOf : null,
-                focusKeys: _focusKeys.Count > 0 ? _focusKeys : null);
+                focusKeys: _focusKeys.Count > 0 ? _focusKeys : null,
+                collapsedFolders: _collapsedFolders.Count > 0 ? _collapsedFolders : null);
+
+            // Each rebuild makes new subgraph objects, so drop the previous registrations rather
+            // than letting them accumulate in the viewer for the life of the window.
+            _folderNames.Unregister(_viewer);
+            _folderNames = GraphBuilder.RegisterSubgraphLabels(_graph, _viewer);
+
             _viewer.Graph = _graph;
+            _folderNames.Reposition();
+            WatchForFolderCollapse();
 
             // Frame the new graph now if the panel is measured, otherwise leave it to
             // GraphHost_SizeChanged.
@@ -637,6 +761,24 @@ namespace DependencyGraph.UI
         {
             var node = NodeUnderCursor();
 
+            // Anything under the pointer can be dragged. Nothing moves until the pointer does,
+            // so this costs an ordinary click nothing.
+            if (e.LeftButtonIsPressed && _viewer.ObjectUnderMouseCursor is VNode vnode)
+            {
+                _dragging = vnode;
+                _dragMoved = false;
+                _lastDragPoint = ((Microsoft.Msagl.Drawing.IViewer)_viewer).ScreenToSource(e);
+            }
+
+            string collapsedFolder = GraphBuilder.CollapsedFolderOf(node);
+            if (collapsedFolder != null)
+            {
+                // A collapsed folder has no chevron of its own to click, so the node itself is
+                // the way back: click it to put the folder's projects on screen again.
+                ExpandFolder(collapsedFolder);
+                return;
+            }
+
             if (e.Clicks > 1 && node != null)
             {
                 // Double click drills into that project's own reference tree.
@@ -652,6 +794,132 @@ namespace DependencyGraph.UI
         private MsaglNode NodeUnderCursor()
         {
             return (_viewer.ObjectUnderMouseCursor as VNode)?.Node;
+        }
+
+        #region Dragging
+
+        /// <summary>The node or folder box being dragged, null when not dragging.</summary>
+        private VNode _dragging;
+
+        private Microsoft.Msagl.Core.Geometry.Point _lastDragPoint;
+
+        /// <summary>Whether the current drag has actually moved anything.</summary>
+        private bool _dragMoved;
+
+        /// <summary>
+        /// Moves the node or folder box under the pointer, with its references following it.
+        /// </summary>
+        /// <remarks>
+        /// Written out by hand rather than handed to MSAGL's LayoutEditor, which crashes the IDE
+        /// outright - see the note where LayoutEditingEnabled is set. The viewer checks
+        /// <c>Handled</c> before it pans, so marking the event handled is what stops a drag on a
+        /// node from panning the whole graph instead.
+        /// </remarks>
+        private void Viewer_MouseMove(object sender, Microsoft.Msagl.Drawing.MsaglMouseEventArgs e)
+        {
+            if (_dragging == null) return;
+
+            if (!e.LeftButtonIsPressed) { EndDrag(); return; }
+
+            var point = ((Microsoft.Msagl.Drawing.IViewer)_viewer).ScreenToSource(e);
+            var delta = point - _lastDragPoint;
+            _lastDragPoint = point;
+
+            if (delta.Length < 0.001) return;
+
+            MoveBy(_dragging, delta);
+            _dragMoved = true;
+            e.Handled = true;
+        }
+
+        private void Viewer_MouseUp(object sender, Microsoft.Msagl.Drawing.MsaglMouseEventArgs e)
+        {
+            EndDrag();
+        }
+
+        private void EndDrag()
+        {
+            if (_dragging == null) return;
+            _dragging = null;
+
+            // A folder name is placed against its box, so it has to follow the box.
+            if (_dragMoved) _folderNames.Reposition();
+            _dragMoved = false;
+        }
+
+        /// <summary>
+        /// Shifts a node - or every project in a folder box - by <paramref name="delta"/>, and
+        /// redraws the references that touch what moved.
+        /// </summary>
+        private void MoveBy(VNode vnode, Microsoft.Msagl.Core.Geometry.Point delta)
+        {
+            var moved = GraphDrag.Move(_graph, vnode.Node, delta);
+
+            // Every element whose geometry moved has to be invalidated, not just the one under
+            // the pointer - a folder box carries the projects inside it.
+            foreach (var node in moved.Nodes) Invalidate(node);
+            foreach (var edge in moved.Edges) InvalidateEdge(edge);
+
+            _viewer.Invalidate(vnode);
+        }
+
+        /// <summary>
+        /// Drawing edge to its visual, built once per graph - as <see cref="_visuals"/>.
+        /// </summary>
+        /// <remarks>
+        /// Typed as the interface because the WPF viewer's own VEdge class is internal to MSAGL,
+        /// unlike VNode.
+        /// </remarks>
+        private Dictionary<Microsoft.Msagl.Drawing.Edge, Microsoft.Msagl.Drawing.IViewerEdge> _edgeVisuals;
+
+        private void InvalidateEdge(Microsoft.Msagl.Drawing.Edge edge)
+        {
+            if (_edgeVisuals == null)
+            {
+                _edgeVisuals = new Dictionary<Microsoft.Msagl.Drawing.Edge, Microsoft.Msagl.Drawing.IViewerEdge>();
+                foreach (var vedge in _viewer.Entities.OfType<Microsoft.Msagl.Drawing.IViewerEdge>())
+                    _edgeVisuals[vedge.Edge] = vedge;
+            }
+
+            if (_edgeVisuals.TryGetValue(edge, out var visual)) _viewer.Invalidate(visual);
+        }
+
+        #endregion
+
+        /// <summary>Solution folders currently drawn as a single node.</summary>
+        private readonly HashSet<string> _collapsedFolders = new HashSet<string>();
+
+        /// <summary>
+        /// Listens for the collapse button on each folder box.
+        /// </summary>
+        /// <remarks>
+        /// MSAGL draws the button and raises the event, but does nothing else - it flips
+        /// Cluster.IsCollapsed and leaves the layout exactly as it was, so on its own the button
+        /// looks broken. Collapsing is done here instead: the folder is remembered and the graph
+        /// rebuilt with that folder as a single node, which is a real layout rather than a flag.
+        /// </remarks>
+        private void WatchForFolderCollapse()
+        {
+            foreach (var entity in _viewer.Entities)
+            {
+                var vnode = entity as VNode;
+                if (!(vnode?.Node is Subgraph subgraph)) continue;
+
+                string folder = subgraph.Id;
+                vnode.IsCollapsedChanged += _ => CollapseFolder(folder);
+            }
+        }
+
+        private void CollapseFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder) || !_collapsedFolders.Add(folder)) return;
+            Rebuild();
+        }
+
+        private void ExpandFolder(string folder)
+        {
+            if (string.IsNullOrEmpty(folder) || !_collapsedFolders.Remove(folder)) return;
+            Rebuild();
         }
 
         /// <summary>Every node currently selected. Ctrl+click adds to it.</summary>
