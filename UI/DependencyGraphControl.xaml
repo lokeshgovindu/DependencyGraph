@@ -53,7 +53,18 @@
             stay put as the window is resized.
         -->
         <Border x:Name="CommandBar" Grid.Row="0" Padding="8,5" BorderThickness="0,0,0,1">
-            <Grid>
+            <!--
+                Scrolls sideways when the bar cannot fit. A tool window docked narrow is common,
+                and the two ends of the bar are fixed-width - the combo boxes and the buttons
+                cannot shrink - so without this the actions on the right are simply unreachable.
+
+                MinWidth follows the viewport so the layout does not change when there is room:
+                the middle column can still stretch and hold the actions against the right edge.
+            -->
+            <ScrollViewer HorizontalScrollBarVisibility="Auto"
+                          VerticalScrollBarVisibility="Disabled"
+                          Padding="0" BorderThickness="0" Background="Transparent">
+            <Grid MinWidth="{Binding ViewportWidth, RelativeSource={RelativeSource AncestorType=ScrollViewer}}">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*" MinWidth="8"/>
@@ -74,7 +85,7 @@
                     <ComboBox x:Name="CBDisplayMethod"
                               Style="{StaticResource BarCombo}"
                               Width="175"
-                              ToolTip="Which references become arrows.&#10;&#10;Deepest references only  -  one arrow per project, giving a clean tree&#10;All references  -  every reference of every project, the honest picture&#10;Project references only  -  this project and what it references directly&#10;Referenced by (impact)  -  everything that depends on this project"/>
+                              ToolTip="Which references become arrows.&#10;&#10;Deepest references only  -  one arrow per project, giving a clean tree&#10;All references  -  every reference of every project, the honest picture&#10;Project references only  -  this project and what it references directly&#10;Referenced by (impact)  -  everything that depends on this project&#10;Entire solution  -  every project and every reference, with no root"/>
 
                     <TextBlock x:Name="Lbl_Direction" Text="Direction" Style="{StaticResource BarLabel}"/>
                     <ComboBox x:Name="CBOrientation"
@@ -115,6 +126,7 @@
                             ToolTip="Save every project in the solution and its references - not just the graph on&#10;screen - as DGML or Graphviz.">Save Solution Graph...</Button>
                 </StackPanel>
             </Grid>
+            </ScrollViewer>
         </Border>
 
         <!-- GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border. -->

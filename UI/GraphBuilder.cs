@@ -89,7 +89,8 @@ namespace DependencyGraph.UI
                 backwards: visibility == ConnectionsVisibility.ReferencedBy,
                 wholeSolution: visibility == ConnectionsVisibility.Solution);
 
-            ApplyExclusions(included, prt);
+            ApplyExclusions(included,
+                visibility == ConnectionsVisibility.Solution ? null : prt);
 
             // Focus narrows the graph to a hand-picked set and the references between them,
             // which is the way to get a readable picture out of a busy solution.
@@ -462,8 +463,14 @@ namespace DependencyGraph.UI
         /// half of it and are rarely what you are looking at. The root is never excluded, since
         /// excluding the project you asked about would leave an empty window.
         /// </remarks>
+        /// <param name="keepAlways">
+        /// A project the patterns must not remove - the one the graph is rooted at, since excluding
+        /// the very project you asked to see would just empty the window. Null for the
+        /// whole-solution view, which has no root: there the patterns apply to everything, or a
+        /// project would survive its own exclusion for no reason the user could see.
+        /// </param>
         private static void ApplyExclusions(HashSet<ProjectReferenceTree> included,
-            ProjectReferenceTree root)
+            ProjectReferenceTree keepAlways)
         {
             string patterns;
             try { patterns = State.Settings.Instance.ExcludedProjects; }
@@ -477,7 +484,7 @@ namespace DependencyGraph.UI
                                 .ToList();
             if (globs.Count == 0) return;
 
-            included.RemoveWhere(p => p != root && globs.Any(g => Matches(p.ProjectName, g)));
+            included.RemoveWhere(p => p != keepAlways && globs.Any(g => Matches(p.ProjectName, g)));
         }
 
         /// <summary>Case-insensitive match supporting <c>*</c> and <c>?</c>.</summary>

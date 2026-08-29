@@ -123,6 +123,10 @@ The **Show** dropdown changes which references are drawn, not which projects:
 On the sample solution above, the same seven projects give 6 connections under *Deepest* and
 12 under *All*.
 
+Everything that depends on one project, which no other view shows:
+
+![The impact view](docs/impact-view.png)
+
 The whole solution at once, with the one project nothing else references drawn as a root:
 
 ![The whole-solution view](docs/solution-view.png)
@@ -385,3 +389,6 @@ checking is deliberately kept out of the control for that reason: `GraphDrag`, `
   renaming the solution file loses them, since they are keyed by its path.
 - Collapsing a folder aggregates its references onto one node, so the connection count drops:
   several references between the same pair of boxes become one arrow.
+- Resizing the window rescales the graph with it, so the zoom drifts from the 100% it opens at.
+  That is MSAGL scaling its own canvas; **Fit**, or the mouse wheel, puts it back where you want.
+- The command bar scrolls sideways rather than wrapping when the window is too narrow for it.
