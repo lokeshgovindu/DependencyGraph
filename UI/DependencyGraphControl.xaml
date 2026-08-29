@@ -129,8 +129,19 @@
             </ScrollViewer>
         </Border>
 
-        <!-- GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border. -->
-        <Grid x:Name="GraphHost" Grid.Row="1" ClipToBounds="True"/>
+        <!--
+            GraphViewer.BindToPanel needs a Panel, so this host is a Grid, not a Border.
+
+            TextFormattingMode is forced back to Ideal because it is an inherited property and
+            Visual Studio sets Display on the shell, which is right for small fixed-size UI text
+            and wrong for anything that zooms: Display snaps each glyph to the pixel grid at its
+            layout size, and the graph then scales that pre-hinted result, so node labels went
+            soft as you zoomed in while the boxes and arrows around them - real geometry - stayed
+            sharp. Ideal keeps the outlines and rescales them properly.
+        -->
+        <Grid x:Name="GraphHost" Grid.Row="1" ClipToBounds="True"
+              TextOptions.TextFormattingMode="Ideal"
+              TextOptions.TextRenderingMode="Auto"/>
 
         <!-- Legend, overlaid on the graph so it costs no layout space when hidden. -->
         <Border x:Name="LegendPanel"
