@@ -39,8 +39,19 @@ namespace DependencyGraph.Scan
                 _item = value;
                 ProjectName = _item.Name;
                 Key = KeyOf(_item);
+                TargetFramework = _item.TargetFramework();
             }
         }
+
+        /// <summary>
+        /// The project's target framework in readable form, or null where the project kind does
+        /// not report one.
+        /// </summary>
+        /// <remarks>
+        /// Read once, when the node is given its project, rather than on demand: it is a COM
+        /// property read per project, and the graph asks about a project many times over.
+        /// </remarks>
+        public string TargetFramework { get; private set; }
 
         /// <summary>Stable identity for a project, falling back if the shell will not answer.</summary>
         public static string KeyOf(Project project)

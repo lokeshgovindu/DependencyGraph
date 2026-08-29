@@ -131,6 +131,81 @@ namespace DependencyGraph.Scan
 
     public static class ProjectExtensions
     {
+        /// <summary>
+        /// The project's target framework, in the form a person would recognise, or null when the
+        /// project will not say.
+        /// </summary>
+        /// <remarks>
+        /// From the TargetFrameworkMoniker property, which is what the project system answers with
+        /// for C#, VB and F# - ".NETFramework,Version=v4.7.2", ".NETCoreApp,Version=v8.0" and so
+        /// on. Plenty of project kinds do not have the property at all and throw when asked, which
+        /// is not worth reporting: it just means there is nothing to show.
+        ///
+        /// A project that multi-targets reports only one framework here. The moniker property is
+        /// singular, and the several targets live in the project file's TargetFrameworks, which
+        /// automation does not surface - so this says "net472" for a project that is also building
+        /// net8.0, rather than pretending to know both.
+        /// </remarks>
+        public static string TargetFramework(this Project p)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            string moniker = null;
+            try { moniker = p.Properties?.Item("TargetFrameworkMoniker")?.Value as string; }
+            catch { return null; }
+
+            return FriendlyFramework(moniker);
+        }
+
+        /// <summary>Turns a target framework moniker into something worth putting on screen.</summary>
+        internal static string FriendlyFramework(string moniker)
+        {
+            if (string.IsNullOrWhiteSpace(moniker)) return null;
+
+            // "<identifier>,Version=v<version>[,Profile=<profile>]"
+            var parts = moniker.Split(',');
+            string identifier = parts[0].Trim();
+            string version = null;
+            string profile = null;
+
+            foreach (var part in parts)
+            {
+                var pair = part.Split(new[] { '=' }, 2);
+                if (pair.Length != 2) continue;
+
+                if (pair[0].Trim().Equals("Version", StringComparison.OrdinalIgnoreCase))
+                    version = pair[1].Trim().TrimStart('v', 'V');
+                else if (pair[0].Trim().Equals("Profile", StringComparison.OrdinalIgnoreCase))
+                    profile = pair[1].Trim();
+            }
+
+            string name;
+            switch (identifier)
+            {
+                case ".NETFramework": name = ".NET Framework"; break;
+                case ".NETStandard":  name = ".NET Standard"; break;
+                case ".NETPortable":  name = ".NET Portable"; break;
+                case "Silverlight":   name = "Silverlight"; break;
+
+                // The moniker stayed .NETCoreApp when the product was renamed at version 5, so
+                // the version is the only thing that says which name to use.
+                case ".NETCoreApp":   name = MajorVersion(version) >= 5 ? ".NET" : ".NET Core"; break;
+
+                default:              name = identifier.TrimStart('.'); break;
+            }
+
+            string text = version == null ? name : name + " " + version;
+            return profile == null ? text : text + " (" + profile + ")";
+        }
+
+        private static int MajorVersion(string version)
+        {
+            if (string.IsNullOrEmpty(version)) return 0;
+
+            var major = version.Split('.')[0];
+            return int.TryParse(major, out int n) ? n : 0;
+        }
+
         public static List<Project> ProjectReferences(this Project p)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

@@ -64,6 +64,7 @@ public static class RenderTest
         CheckStoredPositions();
         CheckTooltips();
         CheckSolutionView(pal);
+        CheckTargetFramework(pal);
 
         Console.WriteLine();
         Console.WriteLine(_failures == 0 ? "ALL CHECKS PASSED" : _failures + " CHECK(S) FAILED");
@@ -897,6 +898,70 @@ public static class RenderTest
         var justRoots = BuildGraph(app, solution, LayerDirection.TB, pal, 0);
         Check(justRoots.NodeCount == 2,
             "depth 0 leaves the entry points alone (got " + justRoots.NodeCount + ")");
+    }
+
+    /// <summary>
+    /// Target frameworks: turning a moniker into something readable, and putting it on a node.
+    /// </summary>
+    /// <remarks>
+    /// From issue #2. The moniker is the only thing automation offers, and its shape has to be
+    /// unpicked - including the case the string does not admit to, which is that .NETCoreApp kept
+    /// its name when the product was renamed at version 5.
+    /// </remarks>
+    static void CheckTargetFramework(object pal)
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== target frameworks ===");
+
+        var ext = _dg.GetType("DependencyGraph.Scan.ProjectExtensions", true);
+        var friendly = ext.GetMethod("FriendlyFramework",
+            BindingFlags.NonPublic | BindingFlags.Static | BindingFlags.Public);
+        Check(friendly != null, "FriendlyFramework is there to read monikers");
+        if (friendly == null) return;
+
+        var cases = new[]
+        {
+            new[] { ".NETFramework,Version=v4.7.2",                   ".NET Framework 4.7.2" },
+            new[] { ".NETFramework,Version=v4.5",                     ".NET Framework 4.5"   },
+            new[] { ".NETCoreApp,Version=v8.0",                       ".NET 8.0"             },
+            new[] { ".NETCoreApp,Version=v5.0",                       ".NET 5.0"             },
+            new[] { ".NETCoreApp,Version=v3.1",                       ".NET Core 3.1"        },
+            new[] { ".NETCoreApp,Version=v2.1",                       ".NET Core 2.1"        },
+            new[] { ".NETStandard,Version=v2.0",                      ".NET Standard 2.0"    },
+            new[] { ".NETFramework,Version=v4.0,Profile=Client",       ".NET Framework 4.0 (Client)" },
+            new[] { "Silverlight,Version=v5.0",                       "Silverlight 5.0"      },
+        };
+
+        foreach (var c in cases)
+        {
+            string got = (string)friendly.Invoke(null, new object[] { c[0] });
+            Check(got == c[1], c[0] + "  ->  " + (got ?? "<null>")
+                  + (got == c[1] ? "" : "   expected " + c[1]));
+        }
+
+        foreach (var junk in new string[] { null, "", "   ", "nonsense" })
+            Check(friendly.Invoke(null, new object[] { junk }) != null || string.IsNullOrWhiteSpace(junk),
+                "a moniker of '" + (junk ?? "<null>") + "' is handled without throwing");
+
+        // The node label: name only by default, name over framework when asked for.
+        var label = _graphBuilder.GetMethod("NodeLabel", BindingFlags.Public | BindingFlags.Static);
+        Check(label != null, "NodeLabel composes what a box says");
+        if (label == null) return;
+
+        var all = MakeSet();
+        var one = NewPrt("Contoso.Core", 0, all);
+        _prtType.GetProperty("TargetFramework").GetSetMethod(true)
+                .Invoke(one, new object[] { ".NET Framework 4.8" });
+
+        Check((string)label.Invoke(null, new object[] { one, false }) == "Contoso.Core",
+            "off, a node shows just the project name");
+        Check((string)label.Invoke(null, new object[] { one, true }) == "Contoso.Core\n.NET Framework 4.8",
+            "on, it shows the framework on a second line");
+
+        // A project kind that reports no framework must not gain a blank second line.
+        var silent = NewPrt("Contoso.Cpp", 1, all);
+        Check((string)label.Invoke(null, new object[] { silent, true }) == "Contoso.Cpp",
+            "a project that reports no framework still shows just its name");
     }
 
     static string GraphBuilderCollapsedFolderOf(Node node)

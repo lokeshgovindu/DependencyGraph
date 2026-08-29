@@ -1288,6 +1288,8 @@ namespace DependencyGraph.UI
             // only has room for short names, and it is what tells two same-named projects apart.
             string detail = $"{project.ProjectName}  (references {project.ReferencesCount}, " +
                             $"referenced by {project.ReferencedByCount})";
+            if (!string.IsNullOrEmpty(project.TargetFramework))
+                detail += $"  ·  {project.TargetFramework}";
             if (project.Key != project.ProjectName) detail += $"  ·  {project.Key}";
 
             SetStat(SB_Selection, "Selected", detail);

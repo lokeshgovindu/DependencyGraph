@@ -37,6 +37,23 @@ namespace DependencyGraph.UI
             }
         }
 
+        /// <summary>
+        /// Whether each node carries its project's target framework under the name.
+        /// </summary>
+        /// <remarks>
+        /// Off by default: MSAGL sizes a node around its label, so a second line makes every node
+        /// taller and the whole graph bigger. The framework is in the tooltip and the status bar
+        /// either way, so this is for when it is the thing being looked for.
+        /// </remarks>
+        public static bool ShowTargetFramework
+        {
+            get
+            {
+                try { return State.Settings.Instance.ShowTargetFramework; }
+                catch { return false; }
+            }
+        }
+
         private static double Clamp(double value, double min, double max)
         {
             return value < min ? min : (value > max ? max : value);
@@ -110,6 +127,9 @@ namespace DependencyGraph.UI
             var collapsed = CollapsedFolders(included, folderOf, collapsedFolders);
             var idOf = NodeIdMap(included, folderOf, collapsed);
 
+            // Read once rather than per node: it goes through the options page.
+            bool showFramework = ShowTargetFramework;
+
             foreach (var folder in collapsed)
             {
                 var folderNode = graph.AddNode(FolderNodePrefix + folder.Key);
@@ -140,7 +160,7 @@ namespace DependencyGraph.UI
                 // node. The name is only the label.
                 var node = graph.AddNode(project.Key);
                 node.UserData = project;
-                node.LabelText = project.ProjectName;
+                node.LabelText = NodeLabel(project, showFramework);
 
                 node.Attr.Shape     = Shape.Box;
                 node.Attr.XRadius   = 3;
@@ -157,7 +177,7 @@ namespace DependencyGraph.UI
                 if (!isRoot && project.IsExternal)
                 {
                     node.Attr.AddStyle(Microsoft.Msagl.Drawing.Style.Dashed);
-                    node.LabelText = project.ProjectName + "  (external)";
+                    node.LabelText = NodeLabel(project, showFramework) + "  (external)";
                 }
 
                 node.Attr.FillColor  = isRoot ? palette.RootFill : palette.NodeFill;
@@ -202,6 +222,19 @@ namespace DependencyGraph.UI
 
             AddEdges(graph, included, visibility, palette, idOf);
             return graph;
+        }
+
+        /// <summary>
+        /// What a project's box says: its name, and its target framework underneath when that is
+        /// switched on and the project reports one.
+        /// </summary>
+        public static string NodeLabel(ProjectReferenceTree project, bool showFramework)
+        {
+            if (project == null) return string.Empty;
+            if (!showFramework || string.IsNullOrEmpty(project.TargetFramework))
+                return project.ProjectName;
+
+            return project.ProjectName + "\n" + project.TargetFramework;
         }
 
         /// <summary>Node id prefix marking a node that stands in for a whole solution folder.</summary>

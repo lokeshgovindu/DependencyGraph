@@ -23,6 +23,7 @@ whether a reference can be removed, or where a circular reference crept in.
 - [Options](#options)
 - [Grouping by solution folder](#grouping-by-solution-folder)
 - [Moving things about](#moving-things-about)
+- [Target frameworks](#target-frameworks)
 - [External references](#external-references)
 - [When the solution changes](#when-the-solution-changes)
 - [Themes](#themes)
@@ -145,7 +146,7 @@ project that was left out.
 | **Reset layout** | Put everything back where the layout wants it. Also on the background right-click. |
 | Mouse wheel | Zoom |
 | **Fit** | Fit the graph to the window |
-| Hover a node | A tooltip with its solution folder, reference counts and path |
+| Hover a node | A tooltip with its target framework, solution folder, reference counts and path |
 | Click a node | Select it; the status bar shows its reference counts and project path |
 | Double-click a node | Re-root the graph on that project |
 | Right-click a node | Highlighting menu — see below |
@@ -202,6 +203,7 @@ projects sharing a name in different solution folders stay separate in the expor
 | **Depth** | `0` | Depth limit on open. `0` means no limit. |
 | **Fit the graph to the window on open** | `false` | Off opens at 100%, which keeps the node text crisp. On fits the whole graph instead. |
 | **Node label font size** | `14` | Point size of the project names, 6 to 32. Nodes are sized around their label, so this scales the whole graph. |
+| **Show the target framework on each node** | `false` | Adds each project's target framework under its name in the graph. Off by default because it makes every node bigger — the framework is in the node's tooltip and the status bar either way. |
 | **Excluded projects** | empty | Semicolon-separated name patterns to leave out, e.g. `*.Tests;*.Benchmarks`. `*` and `?` are supported, matching is case-insensitive, and the project you are looking at is never excluded. |
 | **Path to dot.exe** | empty | Full path to Graphviz's `dot.exe`. Leave empty to search the `PATH`. |
 
@@ -242,6 +244,17 @@ Offsets are written to `%LOCALAPPDATA%\DependencyGraph\positions`, one small fil
 so an arrangement survives closing the solution and closing Visual Studio. Nothing is written
 into your repository. Because the file is keyed by the solution's path, moving or renaming the
 solution starts again from the layout.
+
+## Target frameworks
+
+Each project's target framework is in its tooltip and, for the selected project, in the status
+bar. **Show the target framework on each node** under [Options](#options) puts it in the graph
+itself, under the project name.
+
+A project that multi-targets shows one framework, not all of them. Automation reports a single
+`TargetFrameworkMoniker`; the several targets live in the project file's `TargetFrameworks`, which
+it does not surface. So a project building both `net472` and `net8.0` says one of them rather than
+inventing a list.
 
 ## External references
 

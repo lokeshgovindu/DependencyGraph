@@ -50,6 +50,12 @@ namespace DependencyGraph.State
         [DefaultValue(14.0)]
         public double LabelFontSize { get; set; } = 14.0;
 
+        [Category("Appearance")]
+        [DisplayName("Show the target framework on each node")]
+        [Description("Adds each project's target framework under its name in the graph. Off by default because it makes every node taller and wider, which is a real cost on a large solution - the framework is always in the node's tooltip and in the status bar.")]
+        [DefaultValue(false)]
+        public bool ShowTargetFramework { get; set; } = false;
+
         [Category("Filtering")]
         [DisplayName("Excluded projects")]
         [Description("Semicolon-separated name patterns to leave out of the graph, for example \"*.Tests;*.Benchmarks\". Matched against the project name, case-insensitively.")]

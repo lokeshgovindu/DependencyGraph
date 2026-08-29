@@ -45,6 +45,9 @@ namespace DependencyGraph.UI
             var text = new StringBuilder();
             text.Append(project.ProjectName);
 
+            if (!string.IsNullOrEmpty(project.TargetFramework))
+                text.Append("\nTargets: ").Append(project.TargetFramework);
+
             string folder = folderOf == null ? null : folderOf(project.Key);
             if (!string.IsNullOrEmpty(folder))
                 text.Append("\nSolution folder: ").Append(folder);
