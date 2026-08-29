@@ -44,8 +44,11 @@ Contoso.App ──────────► Contoso.Services ─────�
  (olive green)
 ```
 
-The project you are looking at is the root, filled olive green. Everything else is blue. The
-graph opens at **100%** zoom so the labels are crisp — use **Fit** when you want the whole
+The project you are looking at is the root, filled olive green. Everything else is blue. In the
+**Entire solution** view there is no root, so olive marks the projects nothing else references —
+the solution's entry points.
+
+The graph opens at **100%** zoom so the labels are crisp — use **Fit** when you want the whole
 thing in view instead.
 
 The status bar carries the numbers: which project is rooted, how many nodes and connections
@@ -88,7 +91,7 @@ Solution Explorer and press **Refresh** to rescan.
 
 | Control | Meaning |
 | --- | --- |
-| **Project** | Which project to root the graph at. Type to search. |
+| **Project** | Which project to root the graph at. Type to search. Greyed out under **Entire solution**, which has no root. |
 | **Show** | Which references become arrows — see [Views](#views). |
 | **Direction** | `Top to bottom`, `Left to right`, `Bottom to top` or `Right to left`. |
 | **Depth** | `All`, or 1–6 levels. Limit this on a large solution. |
@@ -100,6 +103,10 @@ Solution Explorer and press **Refresh** to rescan.
 | **Save As...** | Export this project's graph — see [Exporting](#exporting). |
 | **Save Solution Graph...** | Export *every* project in the solution, not just this one. |
 
+Every control has a tooltip saying what it is for — and, where it matters, what it will not do:
+
+![The Focus tooltip](docs/focus-tooltip.png)
+
 ## Views
 
 The **Show** dropdown changes which references are drawn, not which projects:
@@ -110,9 +117,14 @@ The **Show** dropdown changes which references are drawn, not which projects:
 | **All references** | Every reference of every project. The honest picture, and busier: a project referenced by four others gets four arrows. |
 | **Project references only** | Just the selected project and the things it references directly. Two levels, nothing transitive. |
 | **Referenced by (impact)** | Turned around: every project that depends on this one, directly or transitively. What breaks if you change it. Arrows still point at the dependency, so the project you asked about sits at the bottom. |
+| **Entire solution** | Every project in the solution and every reference between them, with no root. The other four start at one project and can only reach what that project reaches; this is the one that shows a solution with several entry points whole. |
 
 On the sample solution above, the same seven projects give 6 connections under *Deepest* and
 12 under *All*.
+
+The whole solution at once, with the one project nothing else references drawn as a root:
+
+![The whole-solution view](docs/solution-view.png)
 
 **Depth** is the other lever. `All` follows the references as far as they go; a number stops
 after that many levels. Whole levels are cut cleanly — you never get an arrow pointing at a
@@ -134,6 +146,10 @@ project that was left out.
 | Right-click a node | Highlighting menu — see below |
 | Ctrl+click a node | Add it to the selection, for **Focus** |
 | <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save the graph as a PNG |
+
+Hovering a node says the rest - a box only has room for a short name:
+
+![The node tooltip](docs/node-tooltip.png)
 
 ## Highlighting
 
@@ -325,21 +341,28 @@ out.
 ## Tests
 
 ```
-powershell -ExecutionPolicy Bypass -File Testsun-checks.ps1
+powershell -ExecutionPolicy Bypass -File Tests\run-checks.ps1
+un-checks.ps1
 ```
 
-Build the extension first; the checks run against `binDebugDependencyGraph.dll`.
+Build the extension first; the checks run against `bin\Debug\DependencyGraph.dll`.
 
-`TestsGraphChecks.cs` is a console app rather than a unit-test project on purpose. The code it
+`Tests\GraphChecks.cs` is a console app rather than a unit-test project on purpose. The code it
 exercises needs a real MSAGL `GraphViewer` in a WPF visual tree, so it hosts one offscreen, lays
 real graphs out and renders them to PNG. It drives the shipped assembly by reflection, so the
 checks cannot drift into testing a copy of the logic. It covers layout direction, the depth
-limit, cycle detection, the impact view, folder boxes and their names, collapse and expand, and
-dragging.
+limit, cycle detection, the impact view, the whole-solution view, folder boxes and their names,
+collapse and expand, dragging, stored positions, and the node tooltip text.
 
-`TestsContrastCheck.ps1` reads the palettes out of the built assembly and checks every
-text-on-background pairing against WCAG AA, in both themes. `TestsMakeDemoSolution.ps1` writes
+`Tests\ContrastCheck.ps1` reads the palettes out of the built assembly and checks every
+text-on-background pairing against WCAG AA, in both themes. `Tests\MakeDemoSolution.ps1` writes
 the throwaway solution the screenshots use.
+
+What the checks cannot reach is anything needing the shell: the control will not construct
+outside Visual Studio, so the wiring in its XAML - the tooltip on the graph surface, the
+`ToolTipService` timings - is confirmed by hovering in the experimental instance. Logic worth
+checking is deliberately kept out of the control for that reason: `GraphDrag`, `NodeTooltip` and
+`NodePositions` are all reachable from the harness.
 
 ## Known limitations
 

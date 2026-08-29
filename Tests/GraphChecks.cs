@@ -63,6 +63,7 @@ public static class RenderTest
         CheckDragging(root, pal);
         CheckStoredPositions();
         CheckTooltips();
+        CheckSolutionView(pal);
 
         Console.WriteLine();
         Console.WriteLine(_failures == 0 ? "ALL CHECKS PASSED" : _failures + " CHECK(S) FAILED");
@@ -836,6 +837,66 @@ public static class RenderTest
         Check(folderText != null && folderText.StartsWith("Components", StringComparison.Ordinal)
               && folderText.IndexOf("Click it to expand", StringComparison.Ordinal) >= 0,
             "a collapsed folder's tooltip says what it is and how to open it");
+    }
+
+    /// <summary>
+    /// The whole-solution view: every project, not only what one project can reach.
+    /// </summary>
+    /// <remarks>
+    /// A solution normally has several entry points - an app, a test host, a command-line tool -
+    /// and a view rooted at one of them cannot see the others or anything only they reference.
+    /// That is the whole point of this view, so the check is built on a solution shaped that way:
+    /// two entry points over a shared dependency.
+    /// </remarks>
+    static void CheckSolutionView(object pal)
+    {
+        Console.WriteLine();
+        Console.WriteLine("=== whole-solution view ===");
+
+        var all = MakeSet();
+        var app  = NewPrt("App",  0, all);
+        var tool = NewPrt("Tool", 0, all);
+        var core = NewPrt("Core", 1, all);
+        var util = NewPrt("Util", 2, all);
+        Refs(app, core);
+        Refs(tool, core);
+        Refs(core, util);
+
+        object allRefs  = Enum.Parse(_visibility, "All");
+        object solution = Enum.Parse(_visibility, "Solution");
+
+        // Rooted at App, Tool is invisible - it is not reachable from App.
+        var rooted = BuildGraph(app, allRefs, LayerDirection.TB, pal, int.MaxValue);
+        Check(rooted.NodeCount == 3 && rooted.FindNode("Tool") == null,
+            "a rooted view cannot see the solution's other entry point (got "
+            + rooted.NodeCount + " nodes)");
+
+        var whole = BuildGraph(app, solution, LayerDirection.TB, pal, int.MaxValue);
+        Check(whole.NodeCount == 4, "the whole-solution view draws every project (got "
+            + whole.NodeCount + ")");
+        Check(whole.FindNode("Tool") != null, "including the entry point the rooted view missed");
+        Check(whole.EdgeCount == 3, "with every reference between them (got " + whole.EdgeCount + ")");
+
+        var edges = new List<string>();
+        foreach (var edge in whole.Edges) edges.Add(edge.Source + "->" + edge.Target);
+        edges.Sort();
+        Check(string.Join(",", edges.ToArray()) == "App->Core,Core->Util,Tool->Core",
+            "and the references are the real ones (" + string.Join(" ", edges.ToArray()) + ")");
+
+        // Both entry points are drawn as roots, since neither is referenced by anything.
+        Check(!whole.FindNode("App").Attr.FillColor.Equals(whole.FindNode("Core").Attr.FillColor)
+              && whole.FindNode("Tool").Attr.FillColor.Equals(whole.FindNode("App").Attr.FillColor),
+            "both entry points are filled as roots, and a referenced project is not");
+
+        // Depth counts down from every entry point at once, not from one arbitrary project.
+        var shallow = BuildGraph(app, solution, LayerDirection.TB, pal, 1);
+        Check(shallow.NodeCount == 3 && shallow.FindNode("Util") == null,
+            "depth 1 keeps both entry points and their shared dependency, and stops (got "
+            + shallow.NodeCount + ")");
+
+        var justRoots = BuildGraph(app, solution, LayerDirection.TB, pal, 0);
+        Check(justRoots.NodeCount == 2,
+            "depth 0 leaves the entry points alone (got " + justRoots.NodeCount + ")");
     }
 
     static string GraphBuilderCollapsedFolderOf(Node node)

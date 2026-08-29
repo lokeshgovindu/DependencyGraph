@@ -25,6 +25,7 @@ namespace DependencyGraph.UI
         private const string ShowAllReferences         = "All references";
         private const string ShowProjectReferencesOnly = "Project references only";
         private const string ShowReferencedBy          = "Referenced by (impact)";
+        private const string ShowEntireSolution        = "Entire solution";
 
         private readonly Dictionary<string, ConnectionsVisibility> _displayMethods =
             new Dictionary<string, ConnectionsVisibility>
@@ -33,6 +34,7 @@ namespace DependencyGraph.UI
                 { ShowAllReferences,         ConnectionsVisibility.All     },
                 { ShowProjectReferencesOnly, ConnectionsVisibility.Project },
                 { ShowReferencedBy,          ConnectionsVisibility.ReferencedBy },
+                { ShowEntireSolution,        ConnectionsVisibility.Solution },
             };
 
         private readonly Dictionary<string, LayerDirection> _directions =
@@ -194,7 +196,12 @@ namespace DependencyGraph.UI
         {
             LegendItems.Children.Clear();
 
-            AddLegendRow(_palette.RootFill, _palette.RootStroke, "The project being examined");
+            // The olive nodes are the project the graph is rooted at - except in the
+            // whole-solution view, which has no root and marks the projects nothing references.
+            AddLegendRow(_palette.RootFill, _palette.RootStroke,
+                SelectedVisibility == ConnectionsVisibility.Solution
+                    ? "Nothing in the solution references it"
+                    : "The project being examined");
             AddLegendRow(_palette.NodeFill, _palette.NodeStroke, "Referenced project");
             AddLegendRow(_palette.ReferencingFill, _palette.NodeStroke, "References the selection");
             AddLegendRow(_palette.ReferencedFill, _palette.NodeStroke, "Referenced by the selection");
@@ -585,11 +592,24 @@ namespace DependencyGraph.UI
 
         #region Building the graph
 
-        private ConnectionsVisibility SelectedVisibility
-            => _displayMethods[(string)CBDisplayMethod.SelectedItem];
+        /// <summary>
+        /// The view the picker is on, or the first one before the pickers have been filled in.
+        /// </summary>
+        /// <remarks>
+        /// Reached from the constructor, by way of ApplyTheme and the legend, which runs before
+        /// PopulateFixedControls has put anything in the combo boxes. Indexing the map with the
+        /// null selection threw there, and an exception in a tool window's constructor shows the
+        /// user a stack trace where the graph should be.
+        /// </remarks>
+        private ConnectionsVisibility SelectedVisibility => Selected(_displayMethods, CBDisplayMethod);
 
-        private LayerDirection SelectedDirection
-            => _directions[(string)CBOrientation.SelectedItem];
+        private LayerDirection SelectedDirection => Selected(_directions, CBOrientation);
+
+        private static T Selected<T>(Dictionary<string, T> map, ComboBox combo)
+        {
+            var name = combo?.SelectedItem as string;
+            return name != null && map.TryGetValue(name, out var value) ? value : map.Values.First();
+        }
 
         /// <summary>The "no limit" entry in the depth picker.</summary>
         private const string DepthAll = "All";
@@ -659,6 +679,12 @@ namespace DependencyGraph.UI
                             choice.Project, _vsScanner.Projects);
                         break;
 
+                    case ConnectionsVisibility.Solution:
+                        // Every project, not just what one project can reach.
+                        _prt = ProjectReferenceTree.GetSolutionTree(_vsScanner.Projects);
+                        projectName = ShowEntireSolution;
+                        break;
+
                     default:
                         _prt = new ProjectReferenceTree(choice.Project);
                         break;
@@ -682,6 +708,13 @@ namespace DependencyGraph.UI
 
             HideEmptyMessage();
 
+            // The picker chooses the project a view is rooted at, and the whole-solution view is
+            // not rooted at one - greying it out says so without hiding which project it would
+            // go back to.
+            bool rooted = visibility != ConnectionsVisibility.Solution;
+            CBProjectNames.IsEnabled = rooted;
+            Lbl_Project.Opacity = rooted ? 1.0 : 0.5;
+
             // Which projects are the solution's own, so references that lead outside it can be
             // drawn as such rather than looking like ordinary nodes with nothing beneath them.
             _prt.MarkExternals(Choices.Select(c => c.Key));
@@ -704,6 +737,9 @@ namespace DependencyGraph.UI
             _viewer.Graph = _graph;
             _folderNames.Reposition();
             ApplyStoredPositions();
+
+            // The legend explains the root colour, which means something different here.
+            BuildLegend();
             WatchForFolderCollapse();
 
             // Frame the new graph now if the panel is measured, otherwise leave it to
@@ -821,13 +857,33 @@ namespace DependencyGraph.UI
             // Has to start non-null, or WPF never raises ToolTipOpening for us to cancel.
             GraphHost.ToolTip = " ";
 
+            // ToolTipOpening bubbles, so this fires for the node shapes too - which matters,
+            // because MSAGL puts a tooltip of its own on each node's outline carrying just the
+            // label. That one is on the innermost element under the pointer, so it wins; the way
+            // past it is to replace the text on whichever element the event came from.
             GraphHost.ToolTipOpening += (s, e) =>
             {
                 string text = TooltipFor(NodeUnderCursor());
                 if (text == null) { e.Handled = true; return; }
 
-                GraphHost.ToolTip = text;
+                Retarget(e.OriginalSource as FrameworkElement, text);
             };
+        }
+
+        /// <summary>
+        /// Puts the tooltip text on the element the pointer is actually over, falling back to the
+        /// graph host.
+        /// </summary>
+        private void Retarget(FrameworkElement element, string text)
+        {
+            if (element != null && !ReferenceEquals(element, GraphHost)
+                && element.ToolTip is string)
+            {
+                element.ToolTip = text;
+                return;
+            }
+
+            GraphHost.ToolTip = text;
         }
 
         /// <summary>The node the tooltip text was last built for.</summary>
@@ -850,7 +906,13 @@ namespace DependencyGraph.UI
             if (node == _hovered) return;
 
             _hovered = node;
-            GraphHost.ToolTip = TooltipFor(node) ?? " ";
+
+            string text = TooltipFor(node);
+
+            // Set it on the shape under the pointer as well as on the host, so the very first
+            // hover shows this text rather than the label MSAGL put there.
+            Retarget(Mouse.DirectlyOver as FrameworkElement, text ?? " ");
+            GraphHost.ToolTip = text ?? " ";
         }
 
         /// <summary>What to say about the node under the pointer, or null for empty canvas.</summary>

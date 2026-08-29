@@ -106,6 +106,122 @@ namespace DependencyGraph.Scan
         /// a project does not know who references it. It needs the whole solution's references
         /// first, so the callers pass them in.
         /// </remarks>
+        /// <summary>
+        /// Every project in the solution and every reference between them, with no single root.
+        /// </summary>
+        /// <remarks>
+        /// The whole solution at once, which is what people mean by "the solution's dependency
+        /// graph" and which the rooted views cannot show: each of those starts at one project and
+        /// only reaches what that project can reach, so anything off to one side is invisible.
+        ///
+        /// Depth is measured from the projects nothing else in the solution references - the entry
+        /// points - so the Depth limit still means something here, and so the projects at the top
+        /// of the solution are the ones drawn as roots. A component whose projects all reference
+        /// each other has no entry point at all; one of its projects is taken as a starting point
+        /// so it is drawn rather than silently dropped.
+        /// </remarks>
+        public static ProjectReferenceTree GetSolutionTree(IList<Project> allProjects)
+        {
+            ThreadHelper.ThrowIfNotOnUIThread();
+
+            var projectsByKey = new Dictionary<string, Project>();
+            var referencesOf = new Dictionary<string, List<string>>();
+            var referencedKeys = new HashSet<string>();
+            var inSolution = new HashSet<string>();
+
+            foreach (var project in allProjects)
+            {
+                string key = KeyOf(project);
+                projectsByKey[key] = project;
+                inSolution.Add(key);
+                if (!referencesOf.ContainsKey(key)) referencesOf[key] = new List<string>();
+
+                foreach (var reference in project.ProjectReferences())
+                {
+                    string refKey = KeyOf(reference);
+                    referencesOf[key].Add(refKey);
+                    referencedKeys.Add(refKey);
+
+                    if (!projectsByKey.ContainsKey(refKey)) projectsByKey[refKey] = reference;
+                }
+            }
+
+            var shared = new Dictionary<string, ProjectReferenceTree>();
+            var all = new HashSet<ProjectReferenceTree>();
+            var nodes = new Dictionary<string, ProjectReferenceTree>();
+
+            foreach (var pair in projectsByKey)
+            {
+                var node = new ProjectReferenceTree
+                {
+                    Item                = pair.Value,
+                    Proj2ProjRefTreeMap = shared,
+                    AllPRTs             = all,
+                    IsExternal          = !inSolution.Contains(pair.Key),
+                };
+                nodes[pair.Key] = node;
+                all.Add(node);
+            }
+
+            foreach (var node in nodes)
+            {
+                if (!referencesOf.TryGetValue(node.Key, out var references)) continue;
+
+                foreach (var refKey in references)
+                    if (nodes.TryGetValue(refKey, out var target) && target != node.Value)
+                        node.Value._references.Add(target);
+            }
+
+            AssignDepthFromEntryPoints(nodes, referencedKeys);
+
+            // Any node will do as the handle the callers hold; an entry point is the tidiest.
+            return nodes.Values.FirstOrDefault(n => n.DepthLevel == 0) ?? nodes.Values.FirstOrDefault();
+        }
+
+        /// <summary>
+        /// Numbers every node by how far it is from the nearest entry point.
+        /// </summary>
+        private static void AssignDepthFromEntryPoints(
+            Dictionary<string, ProjectReferenceTree> nodes, HashSet<string> referencedKeys)
+        {
+            var queue = new Queue<ProjectReferenceTree>();
+            var seen = new HashSet<ProjectReferenceTree>();
+
+            foreach (var pair in nodes)
+                if (!referencedKeys.Contains(pair.Key))
+                {
+                    pair.Value.DepthLevel = 0;
+                    seen.Add(pair.Value);
+                    queue.Enqueue(pair.Value);
+                }
+
+            // Everything referenced by something, in a solution whose projects all reference each
+            // other, would leave nothing to start from.
+            if (queue.Count == 0 && nodes.Count > 0)
+            {
+                var first = nodes.Values.First();
+                first.DepthLevel = 0;
+                seen.Add(first);
+                queue.Enqueue(first);
+            }
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                foreach (var reference in current.References)
+                    if (seen.Add(reference))
+                    {
+                        reference.DepthLevel = current.DepthLevel + 1;
+                        queue.Enqueue(reference);
+                    }
+            }
+
+            // A project only reachable from inside a cycle still has to be drawn somewhere.
+            foreach (var node in nodes.Values)
+                if (!seen.Contains(node))
+                    node.DepthLevel = 1;
+        }
+
         public static ProjectReferenceTree GetReferencedByTree(Project root, IList<Project> allProjects)
         {
             ThreadHelper.ThrowIfNotOnUIThread();

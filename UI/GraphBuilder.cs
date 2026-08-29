@@ -12,7 +12,8 @@ namespace DependencyGraph.UI
         Deepest,      // one edge per project, from the deepest project that references it
         All,          // every reference of every project
         Project,      // the selected project and its direct references only
-        ReferencedBy  // everything that depends on the project, directly or transitively
+        ReferencedBy, // everything that depends on the project, directly or transitively
+        Solution      // every project in the solution and every reference between them
     }
 
     /// <summary>
@@ -85,7 +86,8 @@ namespace DependencyGraph.UI
             // A deep solution graph is unreadable in one view, so only the requested number of
             // levels is drawn. The impact view is walked backwards, since its root is a sink.
             var included = WithinDepth(prt, maxDepth,
-                backwards: visibility == ConnectionsVisibility.ReferencedBy);
+                backwards: visibility == ConnectionsVisibility.ReferencedBy,
+                wholeSolution: visibility == ConnectionsVisibility.Solution);
 
             ApplyExclusions(included, prt);
 
@@ -410,9 +412,16 @@ namespace DependencyGraph.UI
         /// or more, and "depth 1" would have dropped a direct reference.
         /// </remarks>
         private static HashSet<ProjectReferenceTree> WithinDepth(ProjectReferenceTree root,
-            int maxDepth, bool backwards)
+            int maxDepth, bool backwards, bool wholeSolution = false)
         {
-            var within = new HashSet<ProjectReferenceTree> { root };
+            // The whole-solution view has no single root: it starts from every entry point at
+            // once, so that the depth limit counts down from the top of the solution rather than
+            // from one arbitrary project.
+            var starts = wholeSolution && root.AllPRTs != null
+                ? root.AllPRTs.Where(p => p.DepthLevel == 0).DefaultIfEmpty(root).ToList()
+                : new List<ProjectReferenceTree> { root };
+
+            var within = new HashSet<ProjectReferenceTree>(starts);
             if (maxDepth <= 0) return within;
 
             // For the impact view the arrows point towards the root, so the hops have to be
@@ -420,7 +429,8 @@ namespace DependencyGraph.UI
             var neighbours = backwards ? Referencers(root.AllPRTs) : null;
 
             var queue = new Queue<KeyValuePair<ProjectReferenceTree, int>>();
-            queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(root, 0));
+            foreach (var start in starts)
+                queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(start, 0));
 
             while (queue.Count > 0)
             {
@@ -522,9 +532,11 @@ namespace DependencyGraph.UI
             }
 
             // The impact view is a set of projects with the real edges between them, so every
-            // edge within the set is drawn - same as "all references".
+            // edge within the set is drawn - same as "all references". So is the whole solution:
+            // there is no single root to pick one edge per project from.
             if (visibility == ConnectionsVisibility.All
-                || visibility == ConnectionsVisibility.ReferencedBy)
+                || visibility == ConnectionsVisibility.ReferencedBy
+                || visibility == ConnectionsVisibility.Solution)
             {
                 foreach (var project in included)
                     foreach (var reference in project.References)

@@ -29,7 +29,7 @@ The graph opens at 100% zoom so the labels stay crisp; **Fit** puts the whole gr
 status bar shows the node and connection counts, the current zoom, and the selected project's
 reference counts and path.
 
-## Four views
+## Five views
 
 - **Deepest references only** — one arrow per project, giving a clean tree. The quickest way to
   read the shape of a dependency chain.
@@ -38,8 +38,13 @@ reference counts and path.
   transitive.
 - **Referenced by (impact)** — turned around: everything that depends on this project, directly
   or transitively. The "what breaks if I change this?" view.
+- **Entire solution** — every project and every reference between them, with no root. The other
+  four start at one project and only reach what it reaches; this shows a solution with several
+  entry points whole.
 
 ![The impact view](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/impact-view.png)
+
+![The whole solution](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/solution-view.png)
 
 ## Finding your way around a big solution
 
