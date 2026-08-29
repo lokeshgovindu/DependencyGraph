@@ -71,9 +71,14 @@ namespace DependencyGraph.UI
             // Repaint if the user switches VS theme while the window is open. Without this the
             // colours stay as they were when the window was created, which can leave dark text
             // on a light background or the reverse.
-            Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged += OnVsThemeChanged;
-            Unloaded += (s, e) =>
-                Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged -= OnVsThemeChanged;
+            //
+            // Tied to Loaded/Unloaded rather than subscribed once in the constructor: a tool
+            // window can be unloaded and shown again, and unsubscribing on unload without
+            // re-subscribing left theme tracking dead for the rest of the session. ThemeChanged
+            // is also a static event, so staying subscribed after unload would keep this control
+            // alive.
+            Loaded   += (s, e) => SubscribeToThemeChanges(true);
+            Unloaded += (s, e) => SubscribeToThemeChanges(false);
 
             _viewer.LayoutEditingEnabled = false;
             _viewer.RunLayoutAsync = false;
@@ -153,6 +158,19 @@ namespace DependencyGraph.UI
             // the selected item is drawn by a TextBlock that ComboBox's ControlTemplate creates,
             // and implicit styles do not reach elements generated inside a template, so setting
             // a dark background left the text dark-on-dark and invisible.
+        }
+
+        /// <summary>Whether this control is currently listening for theme changes.</summary>
+        private bool _listeningForThemeChanges;
+
+        private void SubscribeToThemeChanges(bool subscribe)
+        {
+            if (subscribe == _listeningForThemeChanges) return;
+
+            if (subscribe) Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged += OnVsThemeChanged;
+            else Microsoft.VisualStudio.PlatformUI.VSColorTheme.ThemeChanged -= OnVsThemeChanged;
+
+            _listeningForThemeChanges = subscribe;
         }
 
         /// <summary>

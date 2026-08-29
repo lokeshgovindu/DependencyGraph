@@ -97,7 +97,7 @@ The **Show** dropdown changes which references are drawn, not which projects:
 
 | View | What it draws |
 | --- | --- |
-| **Deepest references only** | One arrow per project, from the shallowest project that references it. Gives a clean tree — the quickest way to read the shape of a dependency chain. |
+| **Deepest references only** | One arrow per project, from the deepest project that references it. Gives a clean tree — the quickest way to read the shape of a dependency chain. |
 | **All references** | Every reference of every project. The honest picture, and busier: a project referenced by four others gets four arrows. |
 | **Project references only** | Just the selected project and the things it references directly. Two levels, nothing transitive. |
 
@@ -204,8 +204,9 @@ Two things to know if you touch it:
 
 `VSScanner` walks `DTE.Solution.Projects`, flattening solution folders, to get the real project
 list. `ProjectReferenceTree` then builds the reference graph from a chosen root, following
-`VSProject.References` and recording, for each project, the shallowest project that references
-it — that is what **Deepest references only** draws.
+`VSProject.References` and recording, for each project, the deepest project that references it —
+that is what **Deepest references only** draws, and it makes a project's depth the length of the
+longest path to it.
 
 Projects are identified by `Project.UniqueName`, the solution-relative project path. Two
 projects can share a `Name`, and the graph would merge them into one node if it keyed on that.

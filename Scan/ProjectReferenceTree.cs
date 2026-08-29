@@ -12,8 +12,6 @@ namespace DependencyGraph.Scan
     /// </summary>
     public class ProjectReferenceTree
     {
-        public static Func<ProjectReferenceTree, string> toString;
-
         /// <summary>Display name of the project. Not unique within a solution.</summary>
         public string ProjectName;
 
@@ -71,7 +69,7 @@ namespace DependencyGraph.Scan
         /// <summary>Depth level for this node</summary>
         public int DepthLevel { get; private set; } = 0;
 
-        /// <summary>Shallowest project that references this one, keyed by project.</summary>
+        /// <summary>Deepest project that references this one, keyed by project key.</summary>
         private Dictionary<string, ProjectReferenceTree> Proj2ProjRefTreeMap;
 
         public HashSet<ProjectReferenceTree> AllPRTs;
@@ -88,11 +86,6 @@ namespace DependencyGraph.Scan
         /// <summary>How many projects in this graph reference this one.</summary>
         public int ReferencedByCount =>
             AllPRTs == null ? 0 : AllPRTs.Count(p => p != this && p.References.Contains(this));
-
-        public static ProjectReferenceTree GetProjectReferenceTree(Project project)
-        {
-            return new ProjectReferenceTree(project);
-        }
 
         /// <summary>The selected project and its direct references only - a two level graph.</summary>
         public static ProjectReferenceTree GetProjectReferencesOnly(Project project)
@@ -176,8 +169,10 @@ namespace DependencyGraph.Scan
 
                 References.Add(refTree);
 
-                // Only take ownership if this node is closer to the root, so the map always
-                // names the shallowest project that references it.
+                // Take ownership unless the current owner is deeper than this project, so the
+                // map ends up naming the deepest project that references it - which is what
+                // the "deepest references only" view draws, and what makes DepthLevel the
+                // length of the longest path to a project rather than the shortest.
                 if (parentRefTree.DepthLevel > DepthLevel) return;
 
                 refTree.SetLevel(DepthLevel + 1);
@@ -221,7 +216,7 @@ namespace DependencyGraph.Scan
         #region Utils
 
         /// <summary>
-        /// The shallowest project that references this one, or null for the root. This is the
+        /// The deepest project that references this one, or null for the root. This is the
         /// single edge drawn per node in "deepest references only" mode.
         /// </summary>
         public ProjectReferenceTree GetDeepestReference()
@@ -244,10 +239,7 @@ namespace DependencyGraph.Scan
 
         #endregion
 
-        public override string ToString()
-        {
-            return (toString?.Invoke(this) ?? base.ToString()) + $"({DepthLevel})";
-        }
+        public override string ToString() => $"{ProjectName} (depth {DepthLevel})";
 
         public static implicit operator bool(ProjectReferenceTree r) => r != null;
     }

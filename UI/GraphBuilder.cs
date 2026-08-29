@@ -55,11 +55,8 @@ namespace DependencyGraph.UI
             graph.Attr.OptimizeLabelPositions = true;
 
             // A deep solution graph is unreadable in one view, so only the requested number of
-            // levels is drawn. DepthLevel is the distance from the root along the shallowest
-            // path, so filtering on it cuts whole levels cleanly.
-            var included = new HashSet<ProjectReferenceTree>();
-            foreach (var project in prt.AllPRTs)
-                if (project.DepthLevel <= maxDepth) included.Add(project);
+            // levels is drawn.
+            var included = WithinDepth(prt, maxDepth);
 
             foreach (var project in included)
             {
@@ -87,6 +84,39 @@ namespace DependencyGraph.UI
 
             AddEdges(graph, included, visibility, palette);
             return graph;
+        }
+
+        /// <summary>
+        /// The projects reachable from the root in at most <paramref name="maxDepth"/> references.
+        /// </summary>
+        /// <remarks>
+        /// Measured by breadth-first search rather than by ProjectReferenceTree.DepthLevel.
+        /// DepthLevel is the length of the *longest* path to a project - that is what the
+        /// "deepest references only" view is built on - so filtering on it would hide a project
+        /// the root references directly whenever a longer route to it also exists. On a solution
+        /// where App references Core directly and also through Services, Core has DepthLevel 2
+        /// or more, and "depth 1" would have dropped a direct reference.
+        /// </remarks>
+        private static HashSet<ProjectReferenceTree> WithinDepth(ProjectReferenceTree root, int maxDepth)
+        {
+            var within = new HashSet<ProjectReferenceTree> { root };
+            if (maxDepth <= 0) return within;
+
+            var queue = new Queue<KeyValuePair<ProjectReferenceTree, int>>();
+            queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(root, 0));
+
+            while (queue.Count > 0)
+            {
+                var current = queue.Dequeue();
+                if (current.Value >= maxDepth) continue;
+
+                foreach (var reference in current.Key.References)
+                    if (within.Add(reference))
+                        queue.Enqueue(new KeyValuePair<ProjectReferenceTree, int>(
+                            reference, current.Value + 1));
+            }
+
+            return within;
         }
 
         private static void AddEdges(Graph graph, HashSet<ProjectReferenceTree> included,
