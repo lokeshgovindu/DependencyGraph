@@ -625,6 +625,14 @@ public static class RenderTest
                 "reference " + edge.Source + " -> " + edge.Target + " still meets the node it moved");
         }
 
+        // The graph's bounds have to grow with the node, or the dragged node falls outside the
+        // rectangle that framing and PNG export are both measured from.
+        var dragged = node.GeometryNode.BoundingBox;
+        var bounds = graph.BoundingBox;
+        Check(bounds.Left <= dragged.Left + 0.001 && bounds.Right >= dragged.Right - 0.001
+              && bounds.Bottom <= dragged.Bottom + 0.001 && bounds.Top >= dragged.Top - 0.001,
+            "the graph's bounds still contain the node after it was dragged");
+
         // Nothing else may move.
         var untouched = graph.FindNode("EmptyProject");
         var untouchedBefore = untouched.GeometryNode.Center;

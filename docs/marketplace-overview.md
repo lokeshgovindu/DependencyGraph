@@ -48,12 +48,21 @@ Three levers, which matter once a solution runs to hundreds of projects:
 - **Depth** — stop after 1 to 6 levels of references.
 - **Focus** — Ctrl+click several projects, then draw only those and the references between them.
 - **Group** — draw a box around each solution folder, with the folder's name across the top.
+  Click the chevron beside a name to collapse that folder to a single node, with its references
+  aggregated onto it; click the node to expand it again.
 
 ![Grouping and the legend](https://raw.githubusercontent.com/lokeshgovindu/DependencyGraph/master/docs/grouped-and-legend.png)
 
 Plus an **Excluded projects** setting for the test and benchmark projects that reference half the
 solution, and four layout **Directions**: top to bottom, left to right, bottom to top, right to
 left.
+
+## Move things where you want them
+
+Automatic layout is a starting point. Drag a node, or a whole folder box, to where the graph
+reads better - its references follow it and nothing else moves. What you dragged is remembered
+across rebuilds, so changing view, direction or depth does not throw your arrangement away.
+Right-click the background to put everything back.
 
 ## Circular references
 

@@ -322,6 +322,7 @@ namespace DependencyGraph.UI
             _selectedNodes.Clear();
             _focusKeys.Clear();
             _collapsedFolders.Clear();
+            _dragOffsets.Clear();
             _visuals = null;
             _edgeVisuals = null;
             _dragging = null;
@@ -696,6 +697,7 @@ namespace DependencyGraph.UI
 
             _viewer.Graph = _graph;
             _folderNames.Reposition();
+            ApplyStoredPositions();
             WatchForFolderCollapse();
 
             // Frame the new graph now if the panel is measured, otherwise leave it to
@@ -861,6 +863,76 @@ namespace DependencyGraph.UI
             foreach (var edge in moved.Edges) InvalidateEdge(edge);
 
             _viewer.Invalidate(vnode);
+            Remember(vnode.Node, delta);
+        }
+
+        /// <summary>
+        /// Where the user has moved things to, as an offset from wherever the layout puts them,
+        /// keyed by node id - a project's key, or a solution folder's name for a folder box.
+        /// </summary>
+        /// <remarks>
+        /// An offset rather than an absolute position on purpose. Every rebuild is a fresh layout,
+        /// and a stored coordinate from the previous one means nothing in the new one: change the
+        /// direction from top-to-bottom to left-to-right and absolute positions would scatter the
+        /// graph. An offset keeps "I moved this box out of the way" true against whatever the
+        /// layout does next.
+        /// </remarks>
+        private readonly Dictionary<string, Microsoft.Msagl.Core.Geometry.Point> _dragOffsets =
+            new Dictionary<string, Microsoft.Msagl.Core.Geometry.Point>();
+
+        private void Remember(MsaglNode node, Microsoft.Msagl.Core.Geometry.Point delta)
+        {
+            string id = node?.Id;
+            if (string.IsNullOrEmpty(id)) return;
+
+            _dragOffsets.TryGetValue(id, out var offset);
+            _dragOffsets[id] = offset + delta;
+        }
+
+        /// <summary>
+        /// Re-applies what the user dragged, after a rebuild has laid the graph out afresh.
+        /// </summary>
+        /// <remarks>
+        /// An offset for something not in this graph - a project excluded by the depth limit, a
+        /// folder box while grouping is off - is kept rather than dropped, so it comes back with
+        /// the node.
+        /// </remarks>
+        private void ApplyStoredPositions()
+        {
+            if (_graph == null || _dragOffsets.Count == 0) return;
+
+            foreach (var pair in _dragOffsets)
+            {
+                var node = FindNodeOrBox(pair.Key);
+                if (node?.GeometryNode == null) continue;
+
+                var moved = GraphDrag.Move(_graph, node, pair.Value);
+                foreach (var n in moved.Nodes) Invalidate(n);
+                foreach (var e in moved.Edges) InvalidateEdge(e);
+            }
+
+            _folderNames.Reposition();
+        }
+
+        /// <summary>A project node by its key, or a folder box by its folder name.</summary>
+        private MsaglNode FindNodeOrBox(string id)
+        {
+            var node = _graph.FindNode(id);
+            if (node != null) return node;
+
+            if (_graph.RootSubgraph == null) return null;
+            foreach (var subgraph in _graph.RootSubgraph.AllSubgraphsDepthFirstExcludingSelf())
+                if (subgraph.Id == id) return subgraph;
+
+            return null;
+        }
+
+        /// <summary>Puts everything back where the layout wants it.</summary>
+        private void ResetPositions()
+        {
+            if (_dragOffsets.Count == 0) return;
+            _dragOffsets.Clear();
+            Rebuild();
         }
 
         /// <summary>
@@ -1107,21 +1179,44 @@ namespace DependencyGraph.UI
             var clear = new MenuItem { Header = "Clear highlighting" };
             clear.Click += (s, e) => Select(null);
 
+            var reset = new MenuItem { Header = "Reset dragged positions" };
+            reset.Click += (s, e) => ResetPositions();
+
+            var nodeItems = new Separator();
+            var resetItems = new Separator();
+
             menu.Items.Add(referencing);
             menu.Items.Add(referenced);
-            menu.Items.Add(new Separator());
+            menu.Items.Add(nodeItems);
             menu.Items.Add(drillIn);
-            menu.Items.Add(new Separator());
+            menu.Items.Add(resetItems);
             menu.Items.Add(clear);
+            menu.Items.Add(reset);
 
             GraphHost.ContextMenu = menu;
 
-            // The menu only makes sense over a node, so select what was right-clicked first and
-            // suppress the menu entirely when the click landed on empty canvas.
+            // Most of the menu is about a particular node, so select what was right-clicked and
+            // hide those entries when the click landed on empty canvas - where the only thing
+            // worth offering is putting a dragged layout back.
             GraphHost.ContextMenuOpening += (s, e) =>
             {
                 var node = NodeUnderCursor();
-                if (node == null) { e.Handled = true; return; }
+
+                var forNode = node == null ? Visibility.Collapsed : Visibility.Visible;
+                referencing.Visibility = forNode;
+                referenced.Visibility  = forNode;
+                drillIn.Visibility     = forNode;
+                clear.Visibility       = forNode;
+                nodeItems.Visibility   = forNode;
+                resetItems.Visibility  = forNode;
+
+                reset.IsEnabled = _dragOffsets.Count > 0;
+                reset.Header = _dragOffsets.Count == 1
+                    ? "Reset the dragged position"
+                    : $"Reset {_dragOffsets.Count} dragged positions";
+                if (_dragOffsets.Count == 0) reset.Header = "Reset dragged positions";
+
+                if (node == null) return;
 
                 Select(node);
                 referencing.Header = $"Highlight projects referencing '{node.LabelText}'";

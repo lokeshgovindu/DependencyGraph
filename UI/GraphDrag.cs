@@ -93,6 +93,12 @@ namespace DependencyGraph.UI
                 result.Edges.Add(edge);
             }
 
+            // The graph's own bounds do not follow its nodes on their own, and everything that
+            // frames or exports the graph is measured from them - so without this, dragging a node
+            // outside the original extent left it off the edge of a saved PNG, and the 100% view
+            // centred on the wrong middle.
+            graph.GeometryGraph?.UpdateBoundingBox();
+
             return result;
         }
 

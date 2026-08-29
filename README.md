@@ -22,6 +22,7 @@ whether a reference can be removed, or where a circular reference crept in.
 - [Exporting](#exporting)
 - [Options](#options)
 - [Grouping by solution folder](#grouping-by-solution-folder)
+- [Moving things about](#moving-things-about)
 - [External references](#external-references)
 - [When the solution changes](#when-the-solution-changes)
 - [Themes](#themes)
@@ -124,6 +125,7 @@ project that was left out.
 | Drag the background | Pan |
 | Drag a node | Move it. Its references follow it, and nothing else shifts. |
 | Drag a folder box | Move the whole group - the box, the projects in it and their references. |
+| Right-click the background | **Reset dragged positions** - put everything back where the layout wants it. |
 | Mouse wheel | Zoom |
 | **Fit** | Fit the graph to the window |
 | Click a node | Select it; the status bar shows its reference counts and project path |
@@ -197,6 +199,19 @@ with a few hundred projects this is the fastest way to something readable.
 And with `Components` collapsed to a single node:
 
 ![A collapsed solution folder](docs/collapsed-folder.png)
+
+## Moving things about
+
+Automatic layout is a starting point, not the last word. Drag a node, or a whole folder box, to
+where it reads better; its references follow it and nothing else moves.
+
+What you dragged is remembered as an offset from wherever the layout puts that node, so it
+survives a rebuild - changing view, direction or depth, pressing **Refresh**, collapsing a
+folder. An offset rather than a fixed coordinate on purpose: every rebuild is a fresh layout, and
+a coordinate from the previous one would put the node somewhere arbitrary in the new one.
+
+Right-click the background for **Reset dragged positions** to put everything back. Offsets last
+as long as the solution is open; they are not written to disk.
 
 ## External references
 
@@ -327,9 +342,9 @@ the throwaway solution the screenshots use.
   solution as extra nodes.
 - Very large solutions are still large. Use **Depth**, **Group** with folders collapsed, and
   **Deepest references only** together.
-- A node you dragged goes back where the layout puts it on the next rebuild - changing view,
-  direction, depth or project, or pressing **Refresh**. Positions are not saved.
 - References redrawn after a drag are straight lines rather than routed splines, so a dragged
   node's arrows can cross a box they would otherwise have gone around.
+- Dragged positions are kept as an offset from wherever the layout puts a node, and are held for
+  as long as the solution is open rather than written to disk.
 - Collapsing a folder aggregates its references onto one node, so the connection count drops:
   several references between the same pair of boxes become one arrow.
