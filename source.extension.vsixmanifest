@@ -7,7 +7,7 @@
         <MoreInfo>https://marketplace.visualstudio.com/items?itemName=LokeshGovindu.DependencyGraph</MoreInfo>
         <ReleaseNotes>https://github.com/lokeshgovindu/DependencyGraph/releases</ReleaseNotes>
         <Icon>Resources\Icon.png</Icon>
-        <PreviewImage>Resources\Icon.png</PreviewImage>
+        <PreviewImage>Resources\PreviewImage.png</PreviewImage>
         <Tags>dependency graph, project references, dependencies, solution, visualization, diagram, architecture, code map, dgml, graphviz, refactoring, build</Tags>
     </Metadata>
     <Installation>
