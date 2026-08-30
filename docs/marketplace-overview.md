@@ -1,5 +1,3 @@
-# DependencyGraph
-
 Draws your solution's project-to-project reference graph in a dockable tool window — laid out
 properly, inside the IDE.
 
