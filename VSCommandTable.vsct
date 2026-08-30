@@ -21,20 +21,43 @@
 		<Buttons>
 			<Button guid="DependencyGraph" id="Show" priority="0x0100" type="Button">
 				<Parent guid="DependencyGraph" id="MyMenuGroup" />
-				<Icon guid="ImageCatalogGuid" id="DependancyGraph" />
-				<CommandFlag>IconIsMoniker</CommandFlag>
+				<Icon guid="CommandIcons" id="GraphIcon" />
 				<Strings>
 					<ButtonText>Show Dependency Graph</ButtonText>
 					<LocCanonicalName>.DependencyGraph.Show</LocCanonicalName>
 				</Strings>
 			</Button>
 		</Buttons>
+
+		<!--
+			The extension's icon for the two menu items, as a classic bitmap strip rather than an
+			image moniker. The VSCT compiler embeds this PNG into the compiled command table, so the
+			shell has the picture in hand when it draws the menu.
+
+			An image manifest was tried first, since that is the modern mechanism and it is what the
+			tool window pane needs. It never rendered: the manifest installed, validated against
+			Visual Studio's own ImageManifest.xsd and was picked up as a VSIX asset, but no image
+			from it ever resolved - blank in the Tools menu with pack URIs, with relative file URIs
+			and with $(ManifestFolder), and blank with and without a size-agnostic fallback source.
+			A bitmap strip needs none of that machinery, so the menus use it.
+
+			id is a 1-based index into the strip, not an arbitrary number: this strip holds one
+			image, so GraphIcon is 1.
+		-->
+		<Bitmaps>
+			<Bitmap guid="CommandIcons" href="Resources\CommandIcons.png" usedList="GraphIcon" />
+		</Bitmaps>
 	</Commands>
 
 	<Symbols>
 		<GuidSymbol name="DependencyGraph" value="{3eb89cd0-91dc-4be3-bd2c-35f5b7d9bfed}">
 			<IDSymbol name="MyMenuGroup" value="0x0001" />
 			<IDSymbol name="Show" value="0x0100" />
+		</GuidSymbol>
+
+		<!-- The bitmap strip declared above; GraphIcon is its first (and only) image. -->
+		<GuidSymbol name="CommandIcons" value="{9d4a7f62-1c85-4e0b-a3d7-58e6b2094c1f}">
+			<IDSymbol name="GraphIcon" value="1" />
 		</GuidSymbol>
 	</Symbols>
 </CommandTable>

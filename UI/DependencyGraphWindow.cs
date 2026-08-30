@@ -32,6 +32,14 @@ namespace DependencyGraph.UI
         {
             public Pane()
             {
+                // A stock moniker, not the extension's own icon, which the menu items do use. The
+                // pane accepts only a moniker, and a moniker means an image manifest - which never
+                // resolved here, in any of the forms tried. The menus get the real icon from a
+                // bitmap strip instead, which a pane cannot take. See VSCommandTable.vsct.
+                //
+                // Little is lost: Visual Studio 2026's shell draws no icon on a tool window tab at
+                // all - Solution Explorer and Git Changes have none either - so this shows up only
+                // in 2022, where a graph glyph is at least the right idea.
                 BitmapImageMoniker = KnownMonikers.GraphLeftToRight;
             }
         }

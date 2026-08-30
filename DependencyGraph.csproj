@@ -96,6 +96,14 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <IncludeInVSIX>true</IncludeInVSIX>
     </Content>
+    <!--
+      The menu items' icon. Deliberately not marked IncludeInVSIX and not loaded at runtime: the
+      VSCT compiler reads it at build time and embeds it in the compiled command table, so the
+      shipped extension needs no copy of it. See the comment in VSCommandTable.vsct.
+    -->
+    <Content Include="Resources\CommandIcons.png">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <VSCTCompile Include="VSCommandTable.vsct">
