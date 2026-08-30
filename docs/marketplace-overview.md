@@ -71,6 +71,12 @@ What you dragged is remembered per solution: through a rebuild, so changing view
 depth does not throw your arrangement away, and on disk, so it is still there after you close the
 solution and after you close Visual Studio. **Reset layout** puts everything back.
 
+## Target frameworks
+
+Each project's target framework is in its tooltip, and in the status bar for the selected project.
+A setting puts it in the graph itself, under each project's name, for when that is what you are
+looking for.
+
 ## External references
 
 A project that is referenced but is not part of the solution is drawn with a dashed border and
