@@ -50,7 +50,8 @@ reference counts and path.
 
 Three levers, which matter once a solution runs to hundreds of projects:
 
-- **Depth** — stop after 1 to 6 levels of references.
+- **Depth** — **All**, which follows references to the end, or stop after 1 to 6 levels. A number
+  cuts whole levels cleanly, so you never get an arrow pointing at a project that was left out.
 - **Focus** — Ctrl+click several projects, then draw only those and the references between them.
 - **Group** — draw a box around each solution folder, with the folder's name across the top.
   Click the chevron beside a name to collapse that folder to a single node, with its references
