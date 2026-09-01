@@ -84,7 +84,15 @@ namespace DependencyGraph.UI
             // re-subscribing left theme tracking dead for the rest of the session. ThemeChanged
             // is also a static event, so staying subscribed after unload would keep this control
             // alive.
-            Loaded   += (s, e) => { SubscribeToThemeChanges(true);  SubscribeToSolutionEvents(true); };
+            Loaded += (s, e) =>
+            {
+                SubscribeToThemeChanges(true);
+                SubscribeToSolutionEvents(true);
+
+                // Catches up on anything that happened while we were not listening - see the
+                // remarks on SyncToCurrentSolution.
+                SyncToCurrentSolution();
+            };
             Unloaded += (s, e) => { SubscribeToThemeChanges(false); SubscribeToSolutionEvents(false); };
 
             // MSAGL's own layout editor (LayoutEditingEnabled) is what would normally provide
@@ -431,15 +439,61 @@ namespace DependencyGraph.UI
             ThreadHelper.ThrowIfNotOnUIThread();
             _dte = dte;
 
-            if (IsLoaded) { Rescan(); return; }
-            Loaded += OnFirstLoad;
+            // Normally the Loaded handler does the first scan, which it can only do once this has
+            // run and given it a DTE. If the control is already in the visual tree, that handler
+            // has been and gone, so kick the scan off here instead.
+            if (IsLoaded) SyncToCurrentSolution();
         }
 
-        private void OnFirstLoad(object sender, RoutedEventArgs e)
+        /// <summary>Whether <see cref="SyncToCurrentSolution"/> has run at least once.</summary>
+        private bool _syncedOnce;
+
+        /// <summary>
+        /// Brings the window into step with whatever solution the IDE has open now, rescanning
+        /// when that is not the solution the graph was built from.
+        /// </summary>
+        /// <remarks>
+        /// This is both the first scan and the recovery from a solution change we never heard
+        /// about. Solution events are subscribed only while the control is loaded, so a solution
+        /// opened, closed or swapped while the tool window was shut is never announced: the window
+        /// came back showing the previous solution's graph, with its projects still in the picker
+        /// and its status bar counts, until Refresh was pressed. Comparing against
+        /// <see cref="_solutionPath"/> on every load makes that self-correcting however the change
+        /// was missed.
+        ///
+        /// The comparison is what keeps it cheap, and it is not just an optimisation: WPF raises
+        /// Loaded again for something as ordinary as switching document tabs, and rescanning there
+        /// would throw away the arrangement, the view and the zoom the user had set up.
+        /// </remarks>
+        private void SyncToCurrentSolution()
         {
-            Loaded -= OnFirstLoad;
             ThreadHelper.ThrowIfNotOnUIThread();
-            Rescan();
+            if (_dte == null) return;
+
+            string current = null;
+            try
+            {
+                if (_dte.Solution != null && _dte.Solution.IsOpen) current = _dte.Solution.FullName;
+            }
+            catch
+            {
+                // The shell is part-way through a change and will not answer yet. The solution
+                // events cover that case, since we have just subscribed to them.
+                return;
+            }
+
+            // _syncedOnce so that the very first load still says something when no solution is
+            // open, where both sides of the comparison are null.
+            if (_syncedOnce && string.Equals(current, _solutionPath, StringComparison.OrdinalIgnoreCase))
+                return;
+
+            _syncedOnce = true;
+            ForgetSolution();
+
+            if (string.IsNullOrEmpty(current))
+                ShowEmptyMessage("Open a solution to see its project dependency graph.");
+            else
+                Rescan();
         }
 
         /// <summary>
